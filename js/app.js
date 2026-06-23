@@ -3,9 +3,9 @@
  * 串接 AudioEngine、Waveform 與 UI：檔案載入、傳輸控制、
  * 速度/音高、AB 循環、波形互動與鍵盤快捷鍵。
  */
-import { AudioEngine } from "./player.js?v=3";
-import { Waveform } from "./waveform.js?v=3";
-import { StemSeparator, TRACK_LABELS, TRACK_ICONS } from "./separator.js?v=3";
+import { AudioEngine } from "./player.js?v=4";
+import { Waveform } from "./waveform.js?v=4";
+import { StemSeparator, TRACK_LABELS, TRACK_ICONS } from "./separator.js?v=4";
 
 const $ = (id) => document.getElementById(id);
 

@@ -13,7 +13,8 @@
 import { DemucsProcessor, CONSTANTS } from "../vendor/demucs-web/index.js?v=2";
 
 const ORT_VERSION = "1.27.0";
-const ORT_URL = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/dist/ort.webgpu.bundle.min.mjs`;
+const ORT_WEBGPU_URL = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/dist/ort.webgpu.bundle.min.mjs`;
+const ORT_WASM_URL = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/dist/ort.wasm.bundle.min.mjs`;
 const ORT_WASM_BASE = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/dist/`;
 
 export const TRACK_LABELS = {
@@ -91,8 +92,14 @@ export class StemSeparator {
 
   async _initOrt() {
     if (this.ort) return this.ort;
+
+    // 4 軌（JS 做 STFT、圖較單純）用 WebGPU 版以加速；
+    // 6 軌（單一圖、含 iSTFT，需完整 CPU 算子）用完整 WASM 版。
+    const isSingle = this.model.kind === "single";
+    const url = isSingle ? ORT_WASM_URL : ORT_WEBGPU_URL;
+
     this.log("init", "載入 ONNX Runtime…");
-    const mod = await import(/* @vite-ignore */ ORT_URL);
+    const mod = await import(/* @vite-ignore */ url);
     const ort = mod && mod.InferenceSession ? mod : (mod.default || mod);
 
     ort.env.wasm.wasmPaths = ORT_WASM_BASE;
@@ -101,7 +108,7 @@ export class StemSeparator {
       ? Math.min(navigator.hardwareConcurrency || 4, 4)
       : 1;
 
-    this.backend = await this._pickBackend();
+    this.backend = isSingle ? "wasm" : await this._pickBackend();
     this.cb.onBackend?.(this.backend);
     this.log("init", `運算後端：${this.backend.toUpperCase()}`);
 
