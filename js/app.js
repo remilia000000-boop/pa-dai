@@ -3,9 +3,9 @@
  * 串接 AudioEngine、Waveform 與 UI：檔案載入、傳輸控制、
  * 速度/音高、AB 循環、波形互動與鍵盤快捷鍵。
  */
-import { AudioEngine } from "./player.js?v=4";
-import { Waveform } from "./waveform.js?v=4";
-import { StemSeparator, TRACK_LABELS, TRACK_ICONS } from "./separator.js?v=4";
+import { AudioEngine } from "./player.js?v=5";
+import { Waveform } from "./waveform.js?v=5";
+import { StemSeparator, TRACK_LABELS, TRACK_ICONS } from "./separator.js?v=5";
 
 const $ = (id) => document.getElementById(id);
 
@@ -514,9 +514,6 @@ async function runSeparation() {
   try {
     original44 = await decodeAt44100(currentFile);
 
-    const modelKey =
-      document.querySelector('input[name="sepModel"]:checked')?.value || "4s";
-
     separator = new StemSeparator({
       onBackend: (b) => { els.sepBackend.textContent = b.toUpperCase(); },
       onDownloadProgress: (loaded, total) => {
@@ -533,7 +530,7 @@ async function runSeparation() {
       onLog: (phase, msg) => {
         if (phase === "init" || phase === "model") els.sepLog.textContent = msg;
       },
-    }, modelKey);
+    });
 
     stems = await separator.separate(original44);
     currentTracks = separator.tracks.slice();

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>扒帶工具 · Ear Trainer</title>
-  <link rel="stylesheet" href="styles.css?v=4" />
+  <link rel="stylesheet" href="styles.css?v=5" />
   <!-- Tone.js (global) for granular pitch/speed independent playback -->
   <script src="https://unpkg.com/tone@15.0.4/build/Tone.js"></script>
 </head>
@@ -102,18 +102,8 @@
           <span class="sep-title">🎚️ 音軌分離</span>
           <span class="sep-note">把歌拆成 鼓 / 貝斯 / 其他 / 人聲，可只聽伴奏或人聲</span>
         </div>
-        <div class="model-select">
-          <label class="model-opt">
-            <input type="radio" name="sepModel" value="4s" checked />
-            <span>4 軌 · 較快（鼓 / 貝斯 / 其他 / 人聲）</span>
-          </label>
-          <label class="model-opt">
-            <input type="radio" name="sepModel" value="6s" />
-            <span>6 軌 · ＋🎼吉他 / 🎹鋼琴（較慢、較吃資源）</span>
-          </label>
-        </div>
         <button id="separateBtn" class="primary-btn">開始分離</button>
-        <p class="sep-hint">首次會下載 AI 模型（4 軌約 172MB、6 軌約 136MB；之後瀏覽器會快取，免再下載）。建議用支援 WebGPU 的瀏覽器（Chrome / Edge / 新版 Safari）以加快速度。薩克斯風、弦樂等會留在「其他」軌（目前開源模型無法單獨分離）。</p>
+        <p class="sep-hint">首次會下載約 172MB AI 模型（之後瀏覽器會快取，免再下載）。建議用支援 WebGPU 的瀏覽器（Chrome / Edge / 新版 Safari）以加快速度。吉他、鋼琴、薩克斯風、弦樂等會一起留在「其他」軌（目前瀏覽器可用的開源模型只能分這 4 軌）。</p>
 
         <div id="sepProgress" class="sep-progress hidden">
           <div class="sep-stage">
@@ -162,6 +152,6 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=4"></script>
+  <script type="module" src="js/app.js?v=5"></script>
 </body>
 </html>

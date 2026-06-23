@@ -37,20 +37,12 @@ export const TRACK_ICONS = {
 
 export const MODELS = {
   "4s": {
-    label: "4 軌（鼓 / 貝斯 / 其他 / 人聲）· 較快",
+    label: "4 軌（鼓 / 貝斯 / 其他 / 人聲）",
     url: CONSTANTS.DEFAULT_MODEL_URL,
     cache: "demucs-4s-v1",
     kind: "demucs-web",
     tracks: ["drums", "bass", "other", "vocals"],
     sizeMB: 172,
-  },
-  "6s": {
-    label: "6 軌（＋吉他 / 鋼琴）· 較慢、較吃資源",
-    url: "https://huggingface.co/StemSplitio/htdemucs-6s-onnx/resolve/main/htdemucs_6s_fp16weights.onnx",
-    cache: "demucs-6s-fp16-v1",
-    kind: "single",
-    tracks: ["drums", "bass", "other", "vocals", "guitar", "piano"],
-    sizeMB: 136,
   },
 };
 
