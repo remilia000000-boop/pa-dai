@@ -34,6 +34,10 @@ export class AudioEngine {
 
     // 播放自然結束時的回呼（由 app 設定）
     this.onEnded = null;
+
+    // 輸出鏈：GrainPlayer → gain → limiter → destination（防止爆音/硬截波）
+    this.limiter = null;
+    this.outGain = null;
   }
 
   get isLoaded() {
@@ -99,11 +103,17 @@ export class AudioEngine {
     this.audioBuffer = audioBuffer;
     this.duration = audioBuffer.duration;
 
+    // 持久的輸出鏈（只建立一次）：稍微降增益 + 限幅器，避免大聲段落爆音
+    if (!this.limiter) {
+      this.limiter = new Tone.Limiter(-1).toDestination();
+      this.outGain = new Tone.Gain(0.85).connect(this.limiter);
+    }
+
     const toneBuffer = new Tone.ToneAudioBuffer(audioBuffer);
-    this.player = new Tone.GrainPlayer(toneBuffer).toDestination();
-    // 顆粒參數：較小的 grainSize 對節奏較準，overlap 影響平滑度
-    this.player.grainSize = 0.12;
-    this.player.overlap = 0.05;
+    this.player = new Tone.GrainPlayer(toneBuffer).connect(this.outGain);
+    // 顆粒參數：grainSize 較大、overlap ≈ 一半，放慢時才不會把同一小段重播成卡頓
+    this.player.grainSize = 0.2;
+    this.player.overlap = 0.1;
     this.player.playbackRate = this._speed;
     this.player.detune = this._semitones * 100;
 
