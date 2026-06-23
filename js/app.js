@@ -3,10 +3,10 @@
  * 串接 AudioEngine、Waveform 與 UI：檔案載入、傳輸控制、
  * 速度/音高、AB 循環、波形互動與鍵盤快捷鍵。
  */
-import { AudioEngine } from "./player.js?v=11";
-import { Waveform } from "./waveform.js?v=11";
-import { StemSeparator, TRACK_LABELS, TRACK_ICONS } from "./separator.js?v=11";
-import { audioBufferToWav, downloadBlob } from "./exporters.js?v=11";
+import { AudioEngine } from "./player.js?v=12";
+import { Waveform } from "./waveform.js?v=12";
+import { StemSeparator, TRACK_LABELS, TRACK_ICONS } from "./separator.js?v=12";
+import { audioBufferToWav, downloadBlob } from "./exporters.js?v=12";
 
 const $ = (id) => document.getElementById(id);
 
@@ -62,6 +62,9 @@ const els = {
   eqDry: $("eqDry"),
   eqDryVal: $("eqDryVal"),
   spectrumCanvas: $("spectrumCanvas"),
+  // 多頻段等化器
+  geqBands: $("geqBands"),
+  geqReset: $("geqReset"),
   // 導出
   exportWavBtn: $("exportWavBtn"),
 };
@@ -825,3 +828,60 @@ els.exportWavBtn.addEventListener("click", () => {
   }
   downloadBlob(blob, `${base}_${tag}.wav`);
 });
+
+
+// ============================================================
+// 多頻段圖形等化器
+// ============================================================
+function fmtFreqShort(f) {
+  if (f >= 1000) {
+    const k = f / 1000;
+    return (Number.isInteger(k) ? k : k) + "k";
+  }
+  return String(f);
+}
+
+function renderGeqBands() {
+  els.geqBands.innerHTML = "";
+  const freqs = engine.geqBandFreqs;
+  const gains = engine.geqGains;
+  freqs.forEach((f, i) => {
+    const col = document.createElement("div");
+    col.className = "geq-band";
+
+    const db = document.createElement("span");
+    db.className = "geq-db";
+    const showDb = (v) => (v > 0 ? "+" : "") + (Number.isInteger(v) ? v : v.toFixed(1));
+    db.textContent = gains[i] ? showDb(gains[i]) : "0";
+
+    const input = document.createElement("input");
+    input.type = "range";
+    input.min = "-12";
+    input.max = "12";
+    input.step = "0.5";
+    input.value = String(gains[i] || 0);
+    input.title = `${fmtFreqShort(f)}Hz`;
+
+    const lab = document.createElement("span");
+    lab.className = "geq-freq";
+    lab.textContent = fmtFreqShort(f);
+
+    input.addEventListener("input", () => {
+      const v = parseFloat(input.value);
+      engine.setGeqGain(i, v);
+      db.textContent = v === 0 ? "0" : showDb(v);
+    });
+
+    col.appendChild(db);
+    col.appendChild(input);
+    col.appendChild(lab);
+    els.geqBands.appendChild(col);
+  });
+}
+
+els.geqReset.addEventListener("click", () => {
+  engine.resetGeq();
+  renderGeqBands();
+});
+
+renderGeqBands();

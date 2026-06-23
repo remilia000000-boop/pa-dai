@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>扒帶工具 · Ear Trainer</title>
-  <link rel="stylesheet" href="styles.css?v=11" />
+  <link rel="stylesheet" href="styles.css?v=12" />
   <!-- Tone.js (global) for granular pitch/speed independent playback -->
   <script src="https://unpkg.com/tone@15.0.4/build/Tone.js"></script>
 </head>
@@ -153,6 +153,16 @@
         </div>
       </section>
 
+      <!-- 多頻段圖形等化器 -->
+      <section class="geq-panel">
+        <div class="geq-head">
+          <span class="geq-title">🎛️ 多頻段等化器</span>
+          <span class="geq-note">每個頻段獨立 ±12dB，像圖形 EQ 一樣塑形音色</span>
+          <button id="geqReset" class="chip ghost">全部歸零</button>
+        </div>
+        <div id="geqBands" class="geq-bands"></div>
+      </section>
+
       <!-- 音軌分離 -->      <section id="sepPanel" class="sep-panel">
         <div class="sep-head">
           <span class="sep-title">🎚️ 音軌分離</span>
@@ -209,6 +219,6 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=11"></script>
+  <script type="module" src="js/app.js?v=12"></script>
 </body>
 </html>

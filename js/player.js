@@ -52,6 +52,11 @@ export class AudioEngine {
     this._eqHigh = 20000;
     this._eqDry = 0; // 0..1 混入原音比例
 
+    // 多頻段圖形等化器
+    this.geqFreqs = [60, 150, 400, 1000, 2500, 6000, 10000, 15000];
+    this.geqFilters = null;
+    this._geqGains = this.geqFreqs.map(() => 0);
+
     // 頻譜分析
     this.analyser = null;
   }
@@ -129,13 +134,25 @@ export class AudioEngine {
       this.analyser.smoothing = 0.7;
       this.limiter.connect(this.analyser);
 
-      // EQ 鏈：eqInput 分成「乾路(dry)」與「頻段路(wet=HPF→LPF)」，再相加
+      // 多頻段圖形等化器：串接於 EQ 之後、輸出增益之前
+      this.geqFilters = this.geqFreqs.map((f, i) => {
+        const type = i === 0 ? "lowshelf"
+          : i === this.geqFreqs.length - 1 ? "highshelf"
+          : "peaking";
+        return new Tone.Filter({ type, frequency: f, Q: 1, gain: this._geqGains[i] });
+      });
+      for (let i = 0; i < this.geqFilters.length - 1; i++) {
+        this.geqFilters[i].connect(this.geqFilters[i + 1]);
+      }
+      this.geqFilters[this.geqFilters.length - 1].connect(this.outGain);
+
+      // EQ 鏈：eqInput 分成「乾路(dry)」與「頻段路(wet=HPF→LPF)」，再相加 → 圖形 EQ
       this.eqInput = new Tone.Gain(1);
       this.dryGain = new Tone.Gain(1); // 預設直通（EQ 關閉）
       this.wetGain = new Tone.Gain(0);
       this.hpf = new Tone.Filter({ type: "highpass", frequency: 20, rolloff: -48 });
       this.lpf = new Tone.Filter({ type: "lowpass", frequency: 20000, rolloff: -48 });
-      this.eqSum = new Tone.Gain(1).connect(this.outGain);
+      this.eqSum = new Tone.Gain(1).connect(this.geqFilters[0]);
 
       this.eqInput.connect(this.dryGain);
       this.dryGain.connect(this.eqSum);
@@ -174,6 +191,31 @@ export class AudioEngine {
 
   get volume() {
     return this._volume;
+  }
+
+  // ---------- 多頻段圖形等化器 ----------
+  /** 各頻段中心頻率（Hz）。 */
+  get geqBandFreqs() {
+    return this.geqFreqs.slice();
+  }
+
+  /** 各頻段目前增益（dB）。 */
+  get geqGains() {
+    return this._geqGains.slice();
+  }
+
+  /** 設定第 i 個頻段的增益（dB）。 */
+  setGeqGain(i, db) {
+    if (i < 0 || i >= this.geqFreqs.length) return;
+    this._geqGains[i] = db;
+    if (this.geqFilters && this.geqFilters[i]) {
+      this.geqFilters[i].gain.value = db;
+    }
+  }
+
+  /** 全部頻段歸零。 */
+  resetGeq() {
+    for (let i = 0; i < this.geqFreqs.length; i++) this.setGeqGain(i, 0);
   }
 
   // ---------- 頻段 EQ / 單頻段獨奏 ----------
