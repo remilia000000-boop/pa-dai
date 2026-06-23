@@ -3,9 +3,9 @@
  * 串接 AudioEngine、Waveform 與 UI：檔案載入、傳輸控制、
  * 速度/音高、AB 循環、波形互動與鍵盤快捷鍵。
  */
-import { AudioEngine } from "./player.js?v=6";
-import { Waveform } from "./waveform.js?v=6";
-import { StemSeparator, TRACK_LABELS, TRACK_ICONS } from "./separator.js?v=6";
+import { AudioEngine } from "./player.js?v=7";
+import { Waveform } from "./waveform.js?v=7";
+import { StemSeparator, TRACK_LABELS, TRACK_ICONS } from "./separator.js?v=7";
 
 const $ = (id) => document.getElementById(id);
 
@@ -57,6 +57,7 @@ const els = {
   eqHiVal: $("eqHiVal"),
   eqDry: $("eqDry"),
   eqDryVal: $("eqDryVal"),
+  spectrumCanvas: $("spectrumCanvas"),
 };
 
 const engine = new AudioEngine();
@@ -366,6 +367,7 @@ function tick() {
     waveform.drawPlayhead(pos);
     els.curTime.textContent = formatTime(pos);
     if (!engine.isPlaying) setPlayingUI(false);
+    spectrum.draw();
   }
   requestAnimationFrame(tick);
 }
@@ -683,3 +685,91 @@ document.querySelectorAll(".eq-preset").forEach((b) =>
     b.classList.add("active");
   })
 );
+
+
+// ============================================================
+// 即時頻譜分析器（對數頻率軸）
+// ============================================================
+const spectrum = (() => {
+  const canvas = els.spectrumCanvas;
+  const ctx = canvas.getContext("2d");
+  const FMIN = 20;
+  const FMAX = 20000;
+  const DB_MIN = -100;
+  const DB_MAX = -12;
+  const styles = getComputedStyle(document.documentElement);
+  const accent = styles.getPropertyValue("--accent").trim() || "#5b8cff";
+  const accent2 = styles.getPropertyValue("--accent-2").trim() || "#ffb454";
+  let dpr = 1, W = 0, H = 0;
+
+  function resize() {
+    dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    if (w === 0 || h === 0) return false;
+    const cw = Math.floor(w * dpr);
+    const ch = Math.floor(h * dpr);
+    if (canvas.width !== cw || canvas.height !== ch) {
+      canvas.width = cw;
+      canvas.height = ch;
+    }
+    W = canvas.width;
+    H = canvas.height;
+    return true;
+  }
+
+  function freqToX(f) {
+    return (Math.log(f / FMIN) / Math.log(FMAX / FMIN)) * W;
+  }
+
+  function draw() {
+    if (!resize()) return;
+    ctx.clearRect(0, 0, W, H);
+
+    // 頻率格線與標籤
+    ctx.strokeStyle = "rgba(255,255,255,0.06)";
+    ctx.fillStyle = "rgba(255,255,255,0.35)";
+    ctx.lineWidth = 1;
+    ctx.font = `${11 * dpr}px -apple-system, sans-serif`;
+    for (const f of [50, 100, 200, 500, 1000, 2000, 5000, 10000]) {
+      const x = freqToX(f);
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, H);
+      ctx.stroke();
+      const label = f >= 1000 ? `${f / 1000}k` : `${f}`;
+      ctx.fillText(label, x + 3 * dpr, H - 4 * dpr);
+    }
+
+    const data = engine.getSpectrum && engine.getSpectrum();
+    if (!data || data.length === 0) return;
+
+    const bins = data.length;
+    const nyq = (engine.contextSampleRate || 44100) / 2;
+
+    const grad = ctx.createLinearGradient(0, H, 0, 0);
+    grad.addColorStop(0, accent);
+    grad.addColorStop(1, accent2);
+    ctx.fillStyle = grad;
+
+    ctx.beginPath();
+    ctx.moveTo(0, H);
+    for (let x = 0; x <= W; x++) {
+      const frac = x / W;
+      const freq = FMIN * Math.pow(FMAX / FMIN, frac);
+      let bin = Math.round((freq / nyq) * bins);
+      if (bin < 0) bin = 0;
+      else if (bin >= bins) bin = bins - 1;
+      let db = data[bin];
+      if (!isFinite(db)) db = DB_MIN;
+      let norm = (db - DB_MIN) / (DB_MAX - DB_MIN);
+      norm = norm < 0 ? 0 : norm > 1 ? 1 : norm;
+      ctx.lineTo(x, H - norm * H);
+    }
+    ctx.lineTo(W, H);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  return { draw };
+})();

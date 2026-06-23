@@ -50,6 +50,9 @@ export class AudioEngine {
     this._eqLow = 20;
     this._eqHigh = 20000;
     this._eqDry = 0; // 0..1 混入原音比例
+
+    // 頻譜分析
+    this.analyser = null;
   }
 
   get isLoaded() {
@@ -119,6 +122,11 @@ export class AudioEngine {
     if (!this.limiter) {
       this.limiter = new Tone.Limiter(-1).toDestination();
       this.outGain = new Tone.Gain(0.85).connect(this.limiter);
+
+      // 頻譜分析器（接在限幅器後，反映實際聽到的聲音）
+      this.analyser = new Tone.Analyser("fft", 1024);
+      this.analyser.smoothing = 0.7;
+      this.limiter.connect(this.analyser);
 
       // EQ 鏈：eqInput 分成「乾路(dry)」與「頻段路(wet=HPF→LPF)」，再相加
       this.eqInput = new Tone.Gain(1);
@@ -192,6 +200,17 @@ export class AudioEngine {
   setEqDry(dry) {
     this._eqDry = Math.max(0, Math.min(1, dry));
     this._applyEq();
+  }
+
+  // ---------- 頻譜 ----------
+  /** 取得 FFT 頻譜（dB 值的 Float32Array），未就緒回傳 null。 */
+  getSpectrum() {
+    return this.analyser ? this.analyser.getValue() : null;
+  }
+
+  /** 音訊內容(context)的取樣率，用於頻率軸換算。 */
+  get contextSampleRate() {
+    return Tone.getContext().sampleRate;
   }
 
   /** 取得目前播放位置（秒），已處理循環回繞。 */
