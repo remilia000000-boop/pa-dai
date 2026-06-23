@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>扒帶工具 · Ear Trainer</title>
-  <link rel="stylesheet" href="styles.css?v=5" />
+  <link rel="stylesheet" href="styles.css?v=6" />
   <!-- Tone.js (global) for granular pitch/speed independent playback -->
   <script src="https://unpkg.com/tone@15.0.4/build/Tone.js"></script>
 </head>
@@ -96,6 +96,48 @@
         <span class="loop-hint">提示：在波形上拖曳可直接框選區段</span>
       </div>
 
+      <!-- 頻段 EQ / 單頻段獨奏 -->
+      <section class="eq-panel">
+        <div class="eq-head">
+          <span class="eq-title">🎚️ 頻段獨奏 / EQ</span>
+          <span class="eq-note">只聽某個頻率範圍，用音域點出薩克斯 / 弦樂 / 吉他的旋律</span>
+          <button id="eqToggle" class="chip toggle-chip">啟用</button>
+        </div>
+        <div id="eqBody" class="eq-body eq-off">
+          <div class="eq-presets">
+            <span class="mixer-label">音域預設</span>
+            <button class="chip eq-preset" data-lo="40" data-hi="250">低音（貝斯 / 大鼓）</button>
+            <button class="chip eq-preset" data-lo="150" data-hi="800">中低（吉他 / 人聲基頻）</button>
+            <button class="chip eq-preset" data-lo="300" data-hi="3000">中頻（人聲 / 薩克斯 / 弦樂）</button>
+            <button class="chip eq-preset" data-lo="2000" data-hi="12000">高頻（泛音 / 鈸 / 高把位）</button>
+          </div>
+          <div class="eq-controls">
+            <div class="control-card">
+              <div class="control-head">
+                <label for="eqLo">低頻下限</label>
+                <span id="eqLoVal" class="control-val">20 Hz</span>
+              </div>
+              <input id="eqLo" type="range" min="0" max="1" step="0.001" value="0" />
+            </div>
+            <div class="control-card">
+              <div class="control-head">
+                <label for="eqHi">高頻上限</label>
+                <span id="eqHiVal" class="control-val">20 kHz</span>
+              </div>
+              <input id="eqHi" type="range" min="0" max="1" step="0.001" value="1" />
+            </div>
+            <div class="control-card">
+              <div class="control-head">
+                <label for="eqDry">混入原音</label>
+                <span id="eqDryVal" class="control-val">0%</span>
+              </div>
+              <input id="eqDry" type="range" min="0" max="100" step="1" value="0" />
+            </div>
+          </div>
+          <p class="eq-hint">「混入原音」拉高可在保留整體伴奏的同時加強選定頻段；拉到 0 則只剩該頻段。</p>
+        </div>
+      </section>
+
       <!-- 音軌分離 -->
       <section id="sepPanel" class="sep-panel">
         <div class="sep-head">
@@ -152,6 +194,6 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=5"></script>
+  <script type="module" src="js/app.js?v=6"></script>
 </body>
 </html>

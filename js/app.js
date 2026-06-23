@@ -3,9 +3,9 @@
  * 串接 AudioEngine、Waveform 與 UI：檔案載入、傳輸控制、
  * 速度/音高、AB 循環、波形互動與鍵盤快捷鍵。
  */
-import { AudioEngine } from "./player.js?v=5";
-import { Waveform } from "./waveform.js?v=5";
-import { StemSeparator, TRACK_LABELS, TRACK_ICONS } from "./separator.js?v=5";
+import { AudioEngine } from "./player.js?v=6";
+import { Waveform } from "./waveform.js?v=6";
+import { StemSeparator, TRACK_LABELS, TRACK_ICONS } from "./separator.js?v=6";
 
 const $ = (id) => document.getElementById(id);
 
@@ -48,6 +48,15 @@ const els = {
   sepLog: $("sepLog"),
   stemMixer: $("stemMixer"),
   stemToggles: $("stemToggles"),
+  // 頻段 EQ
+  eqToggle: $("eqToggle"),
+  eqBody: $("eqBody"),
+  eqLo: $("eqLo"),
+  eqHi: $("eqHi"),
+  eqLoVal: $("eqLoVal"),
+  eqHiVal: $("eqHiVal"),
+  eqDry: $("eqDry"),
+  eqDryVal: $("eqDryVal"),
 };
 
 const engine = new AudioEngine();
@@ -597,3 +606,80 @@ els.stemToggles.addEventListener("click", async (e) => {
   }
   await applyMixFromStems();
 });
+
+
+// ============================================================
+// 頻段 EQ / 單頻段獨奏
+// ============================================================
+// 滑桿 0..1 對應 20Hz..20kHz（對數）
+function sliderToFreq(x) {
+  return 20 * Math.pow(1000, x);
+}
+function freqToSlider(f) {
+  return Math.max(0, Math.min(1, Math.log(f / 20) / Math.log(1000)));
+}
+function formatFreq(f) {
+  if (f >= 1000) {
+    const k = f / 1000;
+    return `${k >= 10 ? Math.round(k) : k.toFixed(1)} kHz`;
+  }
+  return `${Math.round(f)} Hz`;
+}
+
+function applyEqBandFromSliders() {
+  const lo = sliderToFreq(parseFloat(els.eqLo.value));
+  const hi = sliderToFreq(parseFloat(els.eqHi.value));
+  engine.setEqBand(lo, hi);
+  els.eqLoVal.textContent = formatFreq(Math.min(lo, hi));
+  els.eqHiVal.textContent = formatFreq(Math.max(lo, hi));
+}
+
+function clearEqPresetHighlight() {
+  document.querySelectorAll(".eq-preset").forEach((b) => b.classList.remove("active"));
+}
+
+function setEqEnabledUI(on) {
+  engine.setEqEnabled(on);
+  els.eqToggle.classList.toggle("active", on);
+  els.eqToggle.textContent = on ? "停用" : "啟用";
+  els.eqBody.classList.toggle("eq-off", !on);
+}
+
+els.eqToggle.addEventListener("click", () => {
+  setEqEnabledUI(!engine.eqEnabled);
+  if (engine.eqEnabled) applyEqBandFromSliders();
+});
+
+els.eqLo.addEventListener("input", () => {
+  // 避免低頻越過高頻
+  if (parseFloat(els.eqLo.value) > parseFloat(els.eqHi.value)) {
+    els.eqHi.value = els.eqLo.value;
+  }
+  clearEqPresetHighlight();
+  applyEqBandFromSliders();
+});
+els.eqHi.addEventListener("input", () => {
+  if (parseFloat(els.eqHi.value) < parseFloat(els.eqLo.value)) {
+    els.eqLo.value = els.eqHi.value;
+  }
+  clearEqPresetHighlight();
+  applyEqBandFromSliders();
+});
+els.eqDry.addEventListener("input", () => {
+  const pct = parseInt(els.eqDry.value, 10);
+  engine.setEqDry(pct / 100);
+  els.eqDryVal.textContent = pct + "%";
+});
+
+document.querySelectorAll(".eq-preset").forEach((b) =>
+  b.addEventListener("click", () => {
+    const lo = parseFloat(b.dataset.lo);
+    const hi = parseFloat(b.dataset.hi);
+    els.eqLo.value = String(freqToSlider(lo));
+    els.eqHi.value = String(freqToSlider(hi));
+    if (!engine.eqEnabled) setEqEnabledUI(true);
+    applyEqBandFromSliders();
+    clearEqPresetHighlight();
+    b.classList.add("active");
+  })
+);

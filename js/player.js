@@ -35,9 +35,21 @@ export class AudioEngine {
     // 播放自然結束時的回呼（由 app 設定）
     this.onEnded = null;
 
-    // 輸出鏈：GrainPlayer → gain → limiter → destination（防止爆音/硬截波）
+    // 輸出鏈：GrainPlayer → EQ → gain → limiter → destination
     this.limiter = null;
     this.outGain = null;
+
+    // 頻段 EQ / 單頻段獨奏
+    this.eqInput = null;
+    this.dryGain = null;
+    this.wetGain = null;
+    this.hpf = null;
+    this.lpf = null;
+    this.eqSum = null;
+    this._eqEnabled = false;
+    this._eqLow = 20;
+    this._eqHigh = 20000;
+    this._eqDry = 0; // 0..1 混入原音比例
   }
 
   get isLoaded() {
@@ -107,10 +119,25 @@ export class AudioEngine {
     if (!this.limiter) {
       this.limiter = new Tone.Limiter(-1).toDestination();
       this.outGain = new Tone.Gain(0.85).connect(this.limiter);
+
+      // EQ 鏈：eqInput 分成「乾路(dry)」與「頻段路(wet=HPF→LPF)」，再相加
+      this.eqInput = new Tone.Gain(1);
+      this.dryGain = new Tone.Gain(1); // 預設直通（EQ 關閉）
+      this.wetGain = new Tone.Gain(0);
+      this.hpf = new Tone.Filter({ type: "highpass", frequency: 20, rolloff: -48 });
+      this.lpf = new Tone.Filter({ type: "lowpass", frequency: 20000, rolloff: -48 });
+      this.eqSum = new Tone.Gain(1).connect(this.outGain);
+
+      this.eqInput.connect(this.dryGain);
+      this.dryGain.connect(this.eqSum);
+      this.eqInput.connect(this.hpf);
+      this.hpf.connect(this.lpf);
+      this.lpf.connect(this.wetGain);
+      this.wetGain.connect(this.eqSum);
     }
 
     const toneBuffer = new Tone.ToneAudioBuffer(audioBuffer);
-    this.player = new Tone.GrainPlayer(toneBuffer).connect(this.outGain);
+    this.player = new Tone.GrainPlayer(toneBuffer).connect(this.eqInput);
     // 顆粒參數：grainSize 較大、overlap ≈ 一半，放慢時才不會把同一小段重播成卡頓
     this.player.grainSize = 0.2;
     this.player.overlap = 0.1;
@@ -126,6 +153,45 @@ export class AudioEngine {
       this.loopStart = 0;
       this.loopEnd = this.duration;
     }
+    this._applyEq();
+  }
+
+  // ---------- 頻段 EQ / 單頻段獨奏 ----------
+  _applyEq() {
+    if (!this.eqInput) return;
+    if (this._eqEnabled) {
+      this.hpf.frequency.value = this._eqLow;
+      this.lpf.frequency.value = this._eqHigh;
+      this.wetGain.gain.value = 1;
+      this.dryGain.gain.value = this._eqDry;
+    } else {
+      this.wetGain.gain.value = 0;
+      this.dryGain.gain.value = 1;
+    }
+  }
+
+  setEqEnabled(enabled) {
+    this._eqEnabled = !!enabled;
+    this._applyEq();
+  }
+
+  get eqEnabled() {
+    return this._eqEnabled;
+  }
+
+  /** 設定通過頻段（Hz）。 */
+  setEqBand(lowHz, highHz) {
+    const lo = Math.max(20, Math.min(lowHz, highHz));
+    const hi = Math.min(20000, Math.max(lowHz, highHz));
+    this._eqLow = lo;
+    this._eqHigh = Math.max(lo + 10, hi);
+    this._applyEq();
+  }
+
+  /** 混入原音比例 0..1（0=完全只聽頻段，1=原音+頻段加強）。 */
+  setEqDry(dry) {
+    this._eqDry = Math.max(0, Math.min(1, dry));
+    this._applyEq();
   }
 
   /** 取得目前播放位置（秒），已處理循環回繞。 */
