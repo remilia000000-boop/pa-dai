@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>扒帶工具 · Ear Trainer</title>
-  <link rel="stylesheet" href="styles.css?v=9" />
+  <link rel="stylesheet" href="styles.css?v=10" />
   <!-- Tone.js (global) for granular pitch/speed independent playback -->
   <script src="https://unpkg.com/tone@15.0.4/build/Tone.js"></script>
 </head>
@@ -48,9 +48,6 @@
         <canvas id="overlayCanvas" class="overlay-canvas"></canvas>
         <div id="waveLoading" class="wave-loading hidden">解碼中…</div>
       </div>
-
-      <!-- 和弦軌（對齊波形時間軸） -->
-      <div id="chordLane" class="chord-lane hidden"></div>
 
       <!-- 頻譜 -->
       <div class="spectrum-wrap">
@@ -149,37 +146,6 @@
         </div>
       </section>
 
-      <!-- 和弦偵測 -->
-      <section class="chord-panel">
-        <div class="chord-head">
-          <span class="chord-title">🎼 和弦偵測</span>
-          <span class="chord-now-label">目前：</span>
-          <span id="currentChord" class="current-chord">—</span>
-          <button id="chordBtn" class="chip toggle-chip">偵測和弦</button>
-        </div>
-        <div id="chordProgress" class="chord-progress hidden">
-          <div class="bar"><div id="chordBar" class="bar-fill"></div></div>
-        </div>
-        <p class="chord-hint">分析整首歌的和弦進行（大三 / 小三和弦估計），結果顯示在波形下方並隨播放高亮，點和弦可跳到該處。複雜和弦（7th、轉位、加音）或失真吉他可能不準，請當作輔助參考。</p>
-      </section>
-
-      <!-- 自動採譜 -->
-      <section class="trans-panel">
-        <div class="trans-head">
-          <span class="trans-title">🎵 自動採譜（單音）</span>
-          <button id="transBtn" class="chip toggle-chip">開始採譜</button>
-          <button id="exportMidiBtn" class="chip" disabled>導出 MIDI</button>
-        </div>
-        <div id="transProgress" class="chord-progress hidden">
-          <div class="bar"><div id="transBar" class="bar-fill"></div></div>
-        </div>
-        <div id="pianoRollWrap" class="pianoroll-wrap hidden">
-          <canvas id="pianoRoll" class="pianoroll-canvas"></canvas>
-          <div id="pianoPlayhead" class="piano-playhead"></div>
-        </div>
-        <p class="trans-hint">偵測「單一旋律線」的音高，畫成鋼琴捲簾並可導出 MIDI。<b>會對目前正在播放的音軌分析</b>——建議先用音軌分離切到「貝斯」或「人聲」軌再採譜，準確度最高。和弦 / 多個樂器同時響會抓不準。</p>
-      </section>
-
       <!-- 音軌分離 -->      <section id="sepPanel" class="sep-panel">
         <div class="sep-head">
           <span class="sep-title">🎚️ 音軌分離</span>
@@ -235,6 +201,6 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=9"></script>
+  <script type="module" src="js/app.js?v=10"></script>
 </body>
 </html>

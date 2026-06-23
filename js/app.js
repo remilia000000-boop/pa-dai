@@ -3,12 +3,10 @@
  * 串接 AudioEngine、Waveform 與 UI：檔案載入、傳輸控制、
  * 速度/音高、AB 循環、波形互動與鍵盤快捷鍵。
  */
-import { AudioEngine } from "./player.js?v=9";
-import { Waveform } from "./waveform.js?v=9";
-import { StemSeparator, TRACK_LABELS, TRACK_ICONS } from "./separator.js?v=9";
-import { detectChords } from "./chords.js?v=9";
-import { detectNotes, midiToName } from "./transcribe.js?v=9";
-import { audioBufferToWav, notesToMIDI, downloadBlob } from "./exporters.js?v=9";
+import { AudioEngine } from "./player.js?v=10";
+import { Waveform } from "./waveform.js?v=10";
+import { StemSeparator, TRACK_LABELS, TRACK_ICONS } from "./separator.js?v=10";
+import { audioBufferToWav, downloadBlob } from "./exporters.js?v=10";
 
 const $ = (id) => document.getElementById(id);
 
@@ -61,21 +59,8 @@ const els = {
   eqDry: $("eqDry"),
   eqDryVal: $("eqDryVal"),
   spectrumCanvas: $("spectrumCanvas"),
-  // 和弦偵測
-  chordBtn: $("chordBtn"),
-  chordProgress: $("chordProgress"),
-  chordBar: $("chordBar"),
-  chordLane: $("chordLane"),
-  currentChord: $("currentChord"),
-  // 導出 / 採譜
+  // 導出
   exportWavBtn: $("exportWavBtn"),
-  transBtn: $("transBtn"),
-  exportMidiBtn: $("exportMidiBtn"),
-  transProgress: $("transProgress"),
-  transBar: $("transBar"),
-  pianoRollWrap: $("pianoRollWrap"),
-  pianoRoll: $("pianoRoll"),
-  pianoPlayhead: $("pianoPlayhead"),
 };
 
 const engine = new AudioEngine();
@@ -92,15 +77,6 @@ let original44 = null; // 44100 的原曲 AudioBuffer（分離後作為「原曲
 let separator = null;
 const enabledStems = new Set(); // 自訂混音中啟用的軌道
 let currentTracks = []; // 目前模型分離出的軌道名稱
-
-// 和弦偵測狀態
-let analysisBuffer = null; // 載入時的原始解碼緩衝（供和弦分析）
-let chordSegs = null; // [{start,end,label}]
-let chordSegEls = []; // 對應的 DOM 元素
-let lastChordIndex = -1;
-
-// 採譜狀態
-let transResult = null; // { notes, minMidi, maxMidi }
 
 // ---------- 工具 ----------
 function formatTime(sec) {
@@ -125,13 +101,10 @@ async function handleFile(file) {
   els.trackName.textContent = file.name;
   currentFile = file;
   resetSeparationUI();
-  resetChordUI();
-  resetTranscribeUI();
 
   try {
     const buffer = await engine.loadFile(file);
     waveform.setBuffer(buffer);
-    analysisBuffer = buffer;
 
     // 重設 AB
     pointA = null;
@@ -398,11 +371,6 @@ function tick() {
     els.curTime.textContent = formatTime(pos);
     if (!engine.isPlaying) setPlayingUI(false);
     spectrum.draw();
-    updateCurrentChord(pos);
-    if (transResult && !els.pianoRollWrap.classList.contains("hidden")) {
-      const dur = engine.duration || 1;
-      els.pianoPlayhead.style.left = (pos / dur) * 100 + "%";
-    }
   }
   requestAnimationFrame(tick);
 }
@@ -811,85 +779,6 @@ const spectrum = (() => {
 
 
 // ============================================================
-// 自動和弦偵測
-// ============================================================
-function resetChordUI() {
-  chordSegs = null;
-  chordSegEls = [];
-  lastChordIndex = -1;
-  els.chordLane.innerHTML = "";
-  els.chordLane.classList.add("hidden");
-  els.chordProgress.classList.add("hidden");
-  els.chordBar.style.width = "0%";
-  els.currentChord.textContent = "—";
-  els.chordBtn.disabled = false;
-  els.chordBtn.textContent = "偵測和弦";
-}
-
-function renderChordLane() {
-  els.chordLane.innerHTML = "";
-  chordSegEls = [];
-  if (!chordSegs || !chordSegs.length) return;
-  const dur = engine.duration || analysisBuffer.duration;
-  for (const seg of chordSegs) {
-    const div = document.createElement("div");
-    div.className = "chord-seg" + (seg.label === "N.C." ? " nc" : "");
-    div.style.left = (seg.start / dur) * 100 + "%";
-    div.style.width = Math.max(0, ((seg.end - seg.start) / dur) * 100) + "%";
-    div.textContent = seg.label;
-    div.title = `${seg.label}  (${formatTime(seg.start)})`;
-    div.addEventListener("click", () => {
-      engine.seek(seg.start);
-      els.curTime.textContent = formatTime(seg.start);
-    });
-    els.chordLane.appendChild(div);
-    chordSegEls.push(div);
-  }
-  els.chordLane.classList.remove("hidden");
-}
-
-function updateCurrentChord(pos) {
-  if (!chordSegs || !chordSegs.length) return;
-  let idx = -1;
-  for (let i = 0; i < chordSegs.length; i++) {
-    if (pos >= chordSegs[i].start && pos < chordSegs[i].end) { idx = i; break; }
-  }
-  if (idx === lastChordIndex) return;
-  if (lastChordIndex >= 0 && chordSegEls[lastChordIndex]) {
-    chordSegEls[lastChordIndex].classList.remove("active");
-  }
-  if (idx >= 0 && chordSegEls[idx]) {
-    chordSegEls[idx].classList.add("active");
-    els.currentChord.textContent = chordSegs[idx].label;
-  }
-  lastChordIndex = idx;
-}
-
-els.chordBtn.addEventListener("click", async () => {
-  if (!analysisBuffer) return;
-  els.chordBtn.disabled = true;
-  els.chordBtn.textContent = "分析中…";
-  els.chordProgress.classList.remove("hidden");
-  els.chordBar.style.width = "0%";
-  try {
-    chordSegs = await detectChords(analysisBuffer, {
-      onProgress: (p) => { els.chordBar.style.width = p * 100 + "%"; },
-    });
-    lastChordIndex = -1;
-    renderChordLane();
-    els.chordProgress.classList.add("hidden");
-    els.chordBtn.textContent = "重新偵測";
-    els.chordBtn.disabled = false;
-  } catch (err) {
-    console.error(err);
-    els.chordBtn.textContent = "偵測失敗，重試";
-    els.chordBtn.disabled = false;
-    els.chordProgress.classList.add("hidden");
-  }
-});
-
-
-// ============================================================
 // 導出音檔（WAV）
 // ============================================================
 els.exportWavBtn.addEventListener("click", () => {
@@ -902,113 +791,4 @@ els.exportWavBtn.addEventListener("click", () => {
     else if (enabledStems.size) tag = [...enabledStems].map((s) => TRACK_LABELS[s] || s).join("+");
   }
   downloadBlob(blob, `${base}_${tag}.wav`);
-});
-
-// ============================================================
-// 自動採譜（單音）
-// ============================================================
-function resetTranscribeUI() {
-  transResult = null;
-  els.transBtn.disabled = false;
-  els.transBtn.textContent = "開始採譜";
-  els.exportMidiBtn.disabled = true;
-  els.transProgress.classList.add("hidden");
-  els.transBar.style.width = "0%";
-  els.pianoRollWrap.classList.add("hidden");
-  els.pianoPlayhead.style.left = "0%";
-}
-
-function renderPianoRoll() {
-  const canvas = els.pianoRoll;
-  const ctx = canvas.getContext("2d");
-  const dpr = window.devicePixelRatio || 1;
-  const cw = canvas.clientWidth, chh = canvas.clientHeight;
-  canvas.width = Math.floor(cw * dpr);
-  canvas.height = Math.floor(chh * dpr);
-  const W = canvas.width, H = canvas.height;
-  ctx.clearRect(0, 0, W, H);
-
-  if (!transResult) return;
-  const dur = engine.duration || (analysisBuffer && analysisBuffer.duration) || 1;
-  const loMidi = transResult.minMidi - 1;
-  const hiMidi = transResult.maxMidi + 1;
-  const span = Math.max(1, hiMidi - loMidi);
-  const rowH = H / span;
-
-  const styles = getComputedStyle(document.documentElement);
-  const accent = styles.getPropertyValue("--accent").trim() || "#5b8cff";
-  const accent2 = styles.getPropertyValue("--accent-2").trim() || "#ffb454";
-
-  // 橫向音階格線（C 音與黑鍵列）
-  for (let m = loMidi; m <= hiMidi; m++) {
-    const y = H - (m - loMidi) * rowH;
-    const pc = ((m % 12) + 12) % 12;
-    const isBlack = [1, 3, 6, 8, 10].includes(pc);
-    if (isBlack) {
-      ctx.fillStyle = "rgba(255,255,255,0.03)";
-      ctx.fillRect(0, y - rowH, W, rowH);
-    }
-    if (pc === 0) {
-      ctx.strokeStyle = "rgba(255,255,255,0.10)";
-      ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
-      ctx.fillStyle = "rgba(255,255,255,0.30)";
-      ctx.font = `${10 * dpr}px -apple-system, sans-serif`;
-      ctx.fillText(midiToName(m), 3 * dpr, y - 2 * dpr);
-    }
-  }
-
-  // 音符方塊
-  for (const n of transResult.notes) {
-    const x = (n.start / dur) * W;
-    const w = Math.max(2 * dpr, ((n.end - n.start) / dur) * W);
-    const y = H - (n.midi - loMidi + 1) * rowH;
-    const grad = ctx.createLinearGradient(0, y, 0, y + rowH);
-    grad.addColorStop(0, accent2);
-    grad.addColorStop(1, accent);
-    ctx.fillStyle = grad;
-    ctx.fillRect(x, y + 1, w, rowH - 2);
-    // 音名（空間夠時）
-    if (w > 22 * dpr && rowH > 11 * dpr) {
-      ctx.fillStyle = "rgba(0,0,0,0.65)";
-      ctx.font = `${Math.min(11, rowH / dpr - 2) * dpr}px -apple-system, sans-serif`;
-      ctx.fillText(n.name, x + 2 * dpr, y + rowH - 3 * dpr);
-    }
-  }
-}
-
-els.transBtn.addEventListener("click", async () => {
-  if (!engine.isLoaded || !engine.audioBuffer) return;
-  els.transBtn.disabled = true;
-  els.transBtn.textContent = "採譜中…";
-  els.transProgress.classList.remove("hidden");
-  els.transBar.style.width = "0%";
-  try {
-    transResult = await detectNotes(engine.audioBuffer, {
-      onProgress: (p) => { els.transBar.style.width = p * 100 + "%"; },
-    });
-    els.transProgress.classList.add("hidden");
-    els.pianoRollWrap.classList.remove("hidden");
-    renderPianoRoll();
-    els.transBtn.textContent = "重新採譜";
-    els.transBtn.disabled = false;
-    els.exportMidiBtn.disabled = transResult.notes.length === 0;
-  } catch (err) {
-    console.error(err);
-    els.transBtn.textContent = "採譜失敗，重試";
-    els.transBtn.disabled = false;
-    els.transProgress.classList.add("hidden");
-  }
-});
-
-els.exportMidiBtn.addEventListener("click", () => {
-  if (!transResult || !transResult.notes.length) return;
-  const blob = notesToMIDI(transResult.notes);
-  const base = (currentFile?.name || "transcription").replace(/\.[^.]+$/, "");
-  downloadBlob(blob, `${base}.mid`);
-});
-
-// 視窗大小變動時重畫鋼琴捲簾
-window.addEventListener("resize", () => {
-  if (transResult && !els.pianoRollWrap.classList.contains("hidden")) renderPianoRoll();
 });
