@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>扒帶工具 · Ear Trainer</title>
-  <link rel="stylesheet" href="styles.css?v=12" />
+  <link rel="stylesheet" href="styles.css?v=13" />
   <!-- Tone.js (global) for granular pitch/speed independent playback -->
   <script src="https://unpkg.com/tone@15.0.4/build/Tone.js"></script>
 </head>
@@ -52,6 +52,11 @@
       <!-- 頻譜 -->
       <div class="spectrum-wrap">
         <canvas id="spectrumCanvas" class="spectrum-canvas"></canvas>
+        <div class="pitch-readout">
+          <span class="pitch-label">報音</span>
+          <span id="pitchNote" class="pitch-note">—</span>
+          <span id="pitchInfo" class="pitch-info"></span>
+        </div>
       </div>
 
       <!-- 時間軸 -->
@@ -219,6 +224,6 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=12"></script>
+  <script type="module" src="js/app.js?v=13"></script>
 </body>
 </html>

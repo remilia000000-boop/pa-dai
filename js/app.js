@@ -3,10 +3,10 @@
  * 串接 AudioEngine、Waveform 與 UI：檔案載入、傳輸控制、
  * 速度/音高、AB 循環、波形互動與鍵盤快捷鍵。
  */
-import { AudioEngine } from "./player.js?v=12";
-import { Waveform } from "./waveform.js?v=12";
-import { StemSeparator, TRACK_LABELS, TRACK_ICONS } from "./separator.js?v=12";
-import { audioBufferToWav, downloadBlob } from "./exporters.js?v=12";
+import { AudioEngine } from "./player.js?v=13";
+import { Waveform } from "./waveform.js?v=13";
+import { StemSeparator, TRACK_LABELS, TRACK_ICONS } from "./separator.js?v=13";
+import { audioBufferToWav, downloadBlob } from "./exporters.js?v=13";
 
 const $ = (id) => document.getElementById(id);
 
@@ -62,6 +62,8 @@ const els = {
   eqDry: $("eqDry"),
   eqDryVal: $("eqDryVal"),
   spectrumCanvas: $("spectrumCanvas"),
+  pitchNote: $("pitchNote"),
+  pitchInfo: $("pitchInfo"),
   // 多頻段等化器
   geqBands: $("geqBands"),
   geqReset: $("geqReset"),
@@ -406,6 +408,7 @@ function tick() {
     els.curTime.textContent = formatTime(pos);
     if (!engine.isPlaying) setPlayingUI(false);
     spectrum.draw();
+    updatePitchReadout();
   }
   requestAnimationFrame(tick);
 }
@@ -885,3 +888,84 @@ els.geqReset.addEventListener("click", () => {
 });
 
 renderGeqBands();
+
+
+// ============================================================
+// 即時報音（自相關音高偵測）
+// ============================================================
+const PITCH_NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+let pitchCounter = 0;
+let pitchHistory = []; // 最近偵測到的 midi，用於平滑
+
+function detectPitchAC(buf, sr) {
+  const n = buf.length;
+  let rms = 0;
+  for (let i = 0; i < n; i++) rms += buf[i] * buf[i];
+  const energy = rms;
+  rms = Math.sqrt(rms / n);
+  if (rms < 0.008) return null; // 太小聲/靜音
+
+  const fmin = 55, fmax = 1500;
+  const tauMin = Math.max(2, Math.floor(sr / fmax));
+  const tauMax = Math.min(n - 1, Math.ceil(sr / fmin));
+
+  const corrAt = (tau) => {
+    let s = 0;
+    for (let i = 0; i < n - tau; i++) s += buf[i] * buf[i + tau];
+    return s;
+  };
+
+  let bestTau = -1, bestCorr = 0;
+  for (let tau = tauMin; tau <= tauMax; tau++) {
+    const c = corrAt(tau);
+    if (c > bestCorr) { bestCorr = c; bestTau = tau; }
+  }
+  if (bestTau <= 0) return null;
+  if (bestCorr / energy < 0.5) return null; // 清晰度不足
+
+  // 拋物線內插
+  const cm = corrAt(bestTau - 1);
+  const cp = corrAt(bestTau + 1);
+  const denom = cm - 2 * bestCorr + cp;
+  const shift = denom !== 0 ? (0.5 * (cm - cp)) / denom : 0;
+  const tau = bestTau + shift;
+  const freq = sr / tau;
+  if (freq < fmin || freq > fmax) return null;
+  return freq;
+}
+
+function updatePitchReadout() {
+  if (!engine.isLoaded || !engine.isPlaying) return;
+  pitchCounter++;
+  if (pitchCounter % 4 !== 0) return; // 約每 4 幀偵測一次
+
+  const buf = engine.getWaveform && engine.getWaveform();
+  if (!buf) return;
+  const freq = detectPitchAC(buf, engine.contextSampleRate || 44100);
+
+  if (freq == null) {
+    pitchHistory = [];
+    els.pitchNote.textContent = "—";
+    els.pitchInfo.textContent = "";
+    return;
+  }
+
+  const midiF = 69 + 12 * Math.log2(freq / 440);
+  const midi = Math.round(midiF);
+
+  // 平滑：取最近 5 次的眾數，避免跳動
+  pitchHistory.push(midi);
+  if (pitchHistory.length > 5) pitchHistory.shift();
+  const counts = new Map();
+  let stable = midi, bestC = 0;
+  for (const m of pitchHistory) {
+    const c = (counts.get(m) || 0) + 1;
+    counts.set(m, c);
+    if (c > bestC) { bestC = c; stable = m; }
+  }
+
+  const name = PITCH_NOTES[((stable % 12) + 12) % 12] + (Math.floor(stable / 12) - 1);
+  const cents = Math.round((midiF - stable) * 100);
+  els.pitchNote.textContent = name;
+  els.pitchInfo.textContent = `${cents >= 0 ? "+" : ""}${cents}¢ · ${Math.round(freq)}Hz`;
+}

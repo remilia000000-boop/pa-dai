@@ -59,6 +59,7 @@ export class AudioEngine {
 
     // 頻譜分析
     this.analyser = null;
+    this.waveAnalyser = null;
   }
 
   get isLoaded() {
@@ -133,6 +134,9 @@ export class AudioEngine {
       this.analyser = new Tone.Analyser("fft", 1024);
       this.analyser.smoothing = 0.7;
       this.limiter.connect(this.analyser);
+      // 時域波形分析（供報音/音高偵測）
+      this.waveAnalyser = new Tone.Analyser("waveform", 2048);
+      this.limiter.connect(this.waveAnalyser);
 
       // 多頻段圖形等化器：串接於 EQ 之後、輸出增益之前
       this.geqFilters = this.geqFreqs.map((f, i) => {
@@ -260,6 +264,11 @@ export class AudioEngine {
   /** 取得 FFT 頻譜（dB 值的 Float32Array），未就緒回傳 null。 */
   getSpectrum() {
     return this.analyser ? this.analyser.getValue() : null;
+  }
+
+  /** 取得時域波形（Float32Array，-1..1），未就緒回傳 null。 */
+  getWaveform() {
+    return this.waveAnalyser ? this.waveAnalyser.getValue() : null;
   }
 
   /** 音訊內容(context)的取樣率，用於頻率軸換算。 */
