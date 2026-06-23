@@ -1,41 +1,68 @@
 /**
  * separator.js — 音軌分離（純前端）
  *
- * 使用 demucs-web（HTDemucs, 4 軌）+ onnxruntime-web。
- *   - 優先 WebGPU；不支援時退回單執行緒 WASM（不需 SharedArrayBuffer，
- *     因此可直接部署在 GitHub Pages，無需 COOP/COEP headers）。
- *   - 172MB 模型以 Cache Storage 快取，第二次起免再下載。
+ * 支援兩種模型：
+ *   4s  — timcsy/demucs-web 的 htdemucs（4 軌：鼓/貝斯/其他/人聲）
+ *          透過 demucs-web 的 DemucsProcessor（JS 端做 STFT）。
+ *   6s  — StemSplitio/htdemucs_6s（6 軌：＋吉他/鋼琴），單一圖模型，
+ *          STFT 已包進模型，JS 端只需切段 + overlap-add。
  *
- * 對外：new StemSeparator(callbacks).separate(audioBuffer44100)
- *   回傳 { drums, bass, other, vocals }，每軌 { left, right }（44100Hz）。
+ * 後端：優先 WebGPU，否則單執行緒 WASM（免 SharedArrayBuffer，
+ * 可直接部署在 GitHub Pages）。模型以 Cache Storage 快取。
  */
 import { DemucsProcessor, CONSTANTS } from "../vendor/demucs-web/index.js";
 
 const ORT_VERSION = "1.27.0";
 const ORT_URL = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/dist/ort.webgpu.bundle.min.mjs`;
 const ORT_WASM_BASE = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/dist/`;
-const MODEL_URL = CONSTANTS.DEFAULT_MODEL_URL;
-const MODEL_CACHE = "demucs-model-v1";
 
 export const TRACK_LABELS = {
   drums: "鼓",
   bass: "貝斯",
   other: "其他",
   vocals: "人聲",
+  guitar: "吉他",
+  piano: "鋼琴",
 };
 
+export const TRACK_ICONS = {
+  drums: "🥁",
+  bass: "🎸",
+  other: "🎶",
+  vocals: "🎤",
+  guitar: "🎼",
+  piano: "🎹",
+};
+
+export const MODELS = {
+  "4s": {
+    label: "4 軌（鼓 / 貝斯 / 其他 / 人聲）· 較快",
+    url: CONSTANTS.DEFAULT_MODEL_URL,
+    cache: "demucs-4s-v1",
+    kind: "demucs-web",
+    tracks: ["drums", "bass", "other", "vocals"],
+    sizeMB: 172,
+  },
+  "6s": {
+    label: "6 軌（＋吉他 / 鋼琴）· 較慢、較吃資源",
+    url: "https://huggingface.co/StemSplitio/htdemucs-6s-onnx/resolve/main/htdemucs_6s_fp16weights.onnx",
+    cache: "demucs-6s-fp16-v1",
+    kind: "single",
+    tracks: ["drums", "bass", "other", "vocals", "guitar", "piano"],
+    sizeMB: 136,
+  },
+};
+
+const SEGMENT = 343980; // 7.8s @ 44100，兩種模型相同
+const SEGMENT_OVERLAP = 0.25;
+
 export class StemSeparator {
-  /**
-   * @param {object} cb
-   * @param {(loaded:number,total:number)=>void} [cb.onDownloadProgress]
-   * @param {(progress:number,seg:number,total:number)=>void} [cb.onProgress]
-   * @param {(phase:string,msg:string)=>void} [cb.onLog]
-   * @param {(backend:string)=>void} [cb.onBackend]
-   */
-  constructor(cb = {}) {
+  constructor(cb = {}, modelKey = "4s") {
     this.cb = cb;
+    this.model = MODELS[modelKey] || MODELS["4s"];
     this.ort = null;
-    this.processor = null;
+    this.processor = null; // 4s 用
+    this.session = null; // 6s 用
     this.backend = null;
     this._ready = false;
   }
@@ -44,11 +71,14 @@ export class StemSeparator {
     return CONSTANTS.SAMPLE_RATE; // 44100
   }
 
+  get tracks() {
+    return this.model.tracks;
+  }
+
   log(phase, msg) {
     this.cb.onLog?.(phase, msg);
   }
 
-  /** 偵測可用後端。 */
   async _pickBackend() {
     if ("gpu" in navigator && navigator.gpu) {
       try {
@@ -59,17 +89,14 @@ export class StemSeparator {
     return "wasm";
   }
 
-  /** 動態載入並設定 ONNX Runtime。 */
   async _initOrt() {
     if (this.ort) return this.ort;
     this.log("init", "載入 ONNX Runtime…");
     const mod = await import(/* @vite-ignore */ ORT_URL);
-    // 不同打包可能把 API 放在 default 或命名匯出
     const ort = mod && mod.InferenceSession ? mod : (mod.default || mod);
 
     ort.env.wasm.wasmPaths = ORT_WASM_BASE;
     ort.env.wasm.simd = true;
-    // 沒有跨來源隔離時只能單執行緒（避免依賴 SharedArrayBuffer）
     ort.env.wasm.numThreads = self.crossOriginIsolated
       ? Math.min(navigator.hardwareConcurrency || 4, 4)
       : 1;
@@ -84,22 +111,21 @@ export class StemSeparator {
 
   /** 取得模型 ArrayBuffer（優先快取）。 */
   async _getModelBuffer() {
+    const url = this.model.url;
     let cache = null;
     try {
-      cache = await caches.open(MODEL_CACHE);
-      const hit = await cache.match(MODEL_URL);
+      cache = await caches.open(this.model.cache);
+      const hit = await cache.match(url);
       if (hit) {
         this.log("model", "使用快取的模型");
         const total = Number(hit.headers.get("Content-Length")) || 0;
         if (total) this.cb.onDownloadProgress?.(total, total);
         return await hit.arrayBuffer();
       }
-    } catch (_) {
-      // Cache API 不可用（例如非 https）— 改為直接下載
-    }
+    } catch (_) {}
 
-    this.log("model", "下載模型（約 172MB，首次較久）…");
-    const resp = await fetch(MODEL_URL);
+    this.log("model", `下載模型（約 ${this.model.sizeMB}MB，首次較久）…`);
+    const resp = await fetch(url);
     if (!resp.ok) throw new Error(`模型下載失敗：HTTP ${resp.status}`);
 
     const total = Number(resp.headers.get("Content-Length")) || 0;
@@ -119,7 +145,7 @@ export class StemSeparator {
 
     if (cache) {
       try {
-        await cache.put(MODEL_URL, new Response(bytes, {
+        await cache.put(url, new Response(bytes, {
           headers: { "Content-Length": String(loaded), "Content-Type": "application/octet-stream" },
         }));
       } catch (_) {}
@@ -127,43 +153,133 @@ export class StemSeparator {
     return bytes.buffer;
   }
 
-  /** 載入 ORT 與模型（可重複呼叫，僅執行一次）。 */
   async ensureReady() {
     if (this._ready) return;
     const ort = await this._initOrt();
-
-    this.processor = new DemucsProcessor({
-      ort,
-      onProgress: ({ progress, currentSegment, totalSegments }) =>
-        this.cb.onProgress?.(progress, currentSegment, totalSegments),
-      onLog: (phase, msg) => this.log(phase, msg),
-      // WASM 後端記憶體較吃緊時的保守設定
-      sessionOptions:
-        this.backend === "wasm"
-          ? { enableCpuMemArena: false, enableMemPattern: false }
-          : {},
-    });
-
     const buffer = await this._getModelBuffer();
     this.log("model", "建立推論工作階段…");
-    await this.processor.loadModel(buffer);
+
+    if (this.model.kind === "demucs-web") {
+      this.processor = new DemucsProcessor({
+        ort,
+        onProgress: ({ progress, currentSegment, totalSegments }) =>
+          this.cb.onProgress?.(progress, currentSegment, totalSegments),
+        onLog: (phase, msg) => this.log(phase, msg),
+        sessionOptions:
+          this.backend === "wasm"
+            ? { enableCpuMemArena: false, enableMemPattern: false }
+            : {},
+      });
+      await this.processor.loadModel(buffer);
+    } else {
+      // 單一圖模型：自行建立 session
+      this.session = await ort.InferenceSession.create(buffer, {
+        executionProviders:
+          this.backend === "webgpu" ? ["webgpu", "wasm"] : ["wasm"],
+        graphOptimizationLevel: "basic",
+      });
+    }
+
     this._ready = true;
     this.log("model", "模型就緒");
   }
 
   /**
-   * 分離音軌。
-   * @param {AudioBuffer} audioBuffer 取樣率須為 44100
-   * @returns {Promise<{drums,bass,other,vocals}>}
+   * 分離音軌。audioBuffer 取樣率須為 44100。
+   * @returns {Promise<Object>} 以軌道名為 key，每軌 { left, right }
    */
   async separate(audioBuffer) {
     await this.ensureReady();
     const left = audioBuffer.getChannelData(0);
     const right =
       audioBuffer.numberOfChannels > 1 ? audioBuffer.getChannelData(1) : left;
+
     this.log("separate", "開始分離…");
-    const result = await this.processor.separate(left, right);
+    let result;
+    if (this.model.kind === "demucs-web") {
+      result = await this.processor.separate(left, right);
+    } else {
+      result = await this._separateSingleGraph(left, right);
+    }
     this.log("separate", "分離完成");
+    return result;
+  }
+
+  /** 單一圖模型的切段 + overlap-add 推論。 */
+  async _separateSingleGraph(left, right) {
+    const ort = this.ort;
+    const L = SEGMENT;
+    const stride = Math.floor(L * (1 - SEGMENT_OVERLAP));
+    const tracks = this.model.tracks;
+    const total = left.length;
+    const numSeg = Math.floor(Math.max(0, total - 1) / stride) + 1;
+
+    const outs = tracks.map(() => ({
+      left: new Float32Array(total),
+      right: new Float32Array(total),
+    }));
+    const weights = new Float32Array(total);
+
+    const inName = this.session.inputNames[0];
+    const outName = this.session.outputNames[0];
+
+    let segIdx = 0;
+    for (let start = 0; start < total; start += stride) {
+      const end = Math.min(start + L, total);
+      const segLen = end - start;
+
+      const data = new Float32Array(2 * L);
+      for (let i = 0; i < segLen; i++) {
+        data[i] = left[start + i];
+        data[L + i] = right[start + i];
+      }
+
+      const tensor = new ort.Tensor("float32", data, [1, 2, L]);
+      const res = await this.session.run({ [inName]: tensor });
+      const od = res[outName].data; // [1, tracks, 2, L]
+
+      // 三角窗（淡入淡出）做 overlap-add
+      const win = new Float32Array(segLen);
+      const half = stride * 0.5;
+      for (let i = 0; i < segLen; i++) {
+        const fi = Math.min(i / half, 1);
+        const fo = Math.min((segLen - i) / half, 1);
+        win[i] = Math.max(1e-4, Math.min(fi, fo));
+      }
+
+      for (let s = 0; s < tracks.length; s++) {
+        const baseL = (s * 2 + 0) * L;
+        const baseR = (s * 2 + 1) * L;
+        const oL = outs[s].left;
+        const oR = outs[s].right;
+        for (let i = 0; i < segLen && start + i < total; i++) {
+          oL[start + i] += od[baseL + i] * win[i];
+          oR[start + i] += od[baseR + i] * win[i];
+        }
+      }
+      for (let i = 0; i < segLen && start + i < total; i++) {
+        weights[start + i] += win[i];
+      }
+
+      segIdx++;
+      this.cb.onProgress?.(Math.min(segIdx / numSeg, 1), segIdx, numSeg);
+      // 讓出主執行緒，UI 才能更新進度
+      await new Promise((r) => setTimeout(r, 0));
+    }
+
+    for (let s = 0; s < tracks.length; s++) {
+      const oL = outs[s].left;
+      const oR = outs[s].right;
+      for (let i = 0; i < total; i++) {
+        if (weights[i] > 0) {
+          oL[i] /= weights[i];
+          oR[i] /= weights[i];
+        }
+      }
+    }
+
+    const result = {};
+    tracks.forEach((name, idx) => (result[name] = outs[idx]));
     return result;
   }
 }

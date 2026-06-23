@@ -102,8 +102,18 @@
           <span class="sep-title">🎚️ 音軌分離</span>
           <span class="sep-note">把歌拆成 鼓 / 貝斯 / 其他 / 人聲，可只聽伴奏或人聲</span>
         </div>
+        <div class="model-select">
+          <label class="model-opt">
+            <input type="radio" name="sepModel" value="4s" checked />
+            <span>4 軌 · 較快（鼓 / 貝斯 / 其他 / 人聲）</span>
+          </label>
+          <label class="model-opt">
+            <input type="radio" name="sepModel" value="6s" />
+            <span>6 軌 · ＋🎼吉他 / 🎹鋼琴（較慢、較吃資源）</span>
+          </label>
+        </div>
         <button id="separateBtn" class="primary-btn">開始分離</button>
-        <p class="sep-hint">首次會下載約 172MB AI 模型（之後瀏覽器會快取，免再下載）。建議用支援 WebGPU 的瀏覽器（Chrome / Edge / 新版 Safari）以加快速度。</p>
+        <p class="sep-hint">首次會下載 AI 模型（4 軌約 172MB、6 軌約 136MB；之後瀏覽器會快取，免再下載）。建議用支援 WebGPU 的瀏覽器（Chrome / Edge / 新版 Safari）以加快速度。薩克斯風、弦樂等會留在「其他」軌（目前開源模型無法單獨分離）。</p>
 
         <div id="sepProgress" class="sep-progress hidden">
           <div class="sep-stage">
@@ -123,10 +133,7 @@
           </div>
           <div class="mixer-row">
             <span class="mixer-label">自訂混音</span>
-            <button class="stem-toggle" data-stem="drums">🥁 鼓</button>
-            <button class="stem-toggle" data-stem="bass">🎸 貝斯</button>
-            <button class="stem-toggle" data-stem="other">🎹 其他</button>
-            <button class="stem-toggle" data-stem="vocals">🎤 人聲</button>
+            <div id="stemToggles" class="stem-toggles"></div>
           </div>
           <p class="mixer-hint">分離為估計結果，並非 100% 乾淨；放慢速度時更容易聽清楚。</p>
         </div>

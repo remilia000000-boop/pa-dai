@@ -5,7 +5,7 @@
  */
 import { AudioEngine } from "./player.js";
 import { Waveform } from "./waveform.js";
-import { StemSeparator } from "./separator.js";
+import { StemSeparator, TRACK_LABELS, TRACK_ICONS } from "./separator.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -47,6 +47,7 @@ const els = {
   sepBar: $("sepBar"),
   sepLog: $("sepLog"),
   stemMixer: $("stemMixer"),
+  stemToggles: $("stemToggles"),
 };
 
 const engine = new AudioEngine();
@@ -62,6 +63,7 @@ let stems = null; // { drums, bass, other, vocals } @44100
 let original44 = null; // 44100 的原曲 AudioBuffer（分離後作為「原曲」與切換基準）
 let separator = null;
 const enabledStems = new Set(); // 自訂混音中啟用的軌道
+let currentTracks = []; // 目前模型分離出的軌道名稱
 
 // ---------- 工具 ----------
 function formatTime(sec) {
@@ -379,7 +381,10 @@ function resetSeparationUI() {
   separator = null;
   useOriginal = false;
   enabledStems.clear();
+  currentTracks = [];
+  els.stemToggles.innerHTML = "";
   els.separateBtn.disabled = false;
+  els.separateBtn.textContent = "開始分離";
   els.separateBtn.classList.remove("hidden");
   els.sepProgress.classList.add("hidden");
   els.stemMixer.classList.add("hidden");
@@ -387,6 +392,24 @@ function resetSeparationUI() {
   setSepBar(0);
   els.sepLog.textContent = "";
   setSepStage("準備中…");
+}
+
+/** 依目前模型的軌道動態產生自訂混音按鈕。 */
+function renderStemToggles() {
+  els.stemToggles.innerHTML = "";
+  for (const name of currentTracks) {
+    const btn = document.createElement("button");
+    btn.className = "stem-toggle";
+    btn.dataset.stem = name;
+    const icon = TRACK_ICONS[name] || "🎵";
+    btn.textContent = `${icon} ${TRACK_LABELS[name] || name}`;
+    els.stemToggles.appendChild(btn);
+  }
+}
+
+/** 伴奏（去人聲）所對應的軌道。 */
+function instTracks() {
+  return currentTracks.filter((t) => t !== "vocals");
 }
 
 /** 以 44100Hz 解碼檔案（必要時重新取樣）。 */
@@ -471,7 +494,7 @@ function updateMixerUI() {
     const p = b.dataset.preset;
     let active = false;
     if (p === "original") active = useOriginal;
-    else if (p === "inst") active = !useOriginal && setEq(enabledStems, ["drums", "bass", "other"]);
+    else if (p === "inst") active = !useOriginal && setEq(enabledStems, instTracks());
     else if (p === "vocals") active = !useOriginal && setEq(enabledStems, ["vocals"]);
     b.classList.toggle("active", active);
   });
@@ -491,6 +514,9 @@ async function runSeparation() {
   try {
     original44 = await decodeAt44100(currentFile);
 
+    const modelKey =
+      document.querySelector('input[name="sepModel"]:checked')?.value || "4s";
+
     separator = new StemSeparator({
       onBackend: (b) => { els.sepBackend.textContent = b.toUpperCase(); },
       onDownloadProgress: (loaded, total) => {
@@ -507,9 +533,11 @@ async function runSeparation() {
       onLog: (phase, msg) => {
         if (phase === "init" || phase === "model") els.sepLog.textContent = msg;
       },
-    });
+    }, modelKey);
 
     stems = await separator.separate(original44);
+    currentTracks = separator.tracks.slice();
+    renderStemToggles();
 
     // 切換引擎基準到 44100 原曲，之後各種混音切換才能完全對齊
     await engine.loadAudioBuffer(original44, { preserve: true });
@@ -521,7 +549,8 @@ async function runSeparation() {
     setSepStage("完成！");
     setSepBar(100);
     els.sepProgress.classList.add("hidden");
-    els.separateBtn.classList.add("hidden");
+    els.separateBtn.disabled = false;
+    els.separateBtn.textContent = "重新分離";
     els.stemMixer.classList.remove("hidden");
     useOriginal = true;
     enabledStems.clear();
@@ -544,7 +573,7 @@ document.querySelectorAll(".preset").forEach((b) =>
       await loadOriginalMix();
     } else if (p === "inst") {
       enabledStems.clear();
-      ["drums", "bass", "other"].forEach((s) => enabledStems.add(s));
+      instTracks().forEach((s) => enabledStems.add(s));
       await applyMixFromStems();
     } else if (p === "vocals") {
       enabledStems.clear();
@@ -554,20 +583,20 @@ document.querySelectorAll(".preset").forEach((b) =>
   })
 );
 
-document.querySelectorAll(".stem-toggle").forEach((b) =>
-  b.addEventListener("click", async () => {
-    if (!stems) return;
-    const s = b.dataset.stem;
-    if (useOriginal) {
-      // 從原曲切到自訂：清空後只留這一軌
-      useOriginal = false;
-      enabledStems.clear();
-      enabledStems.add(s);
-    } else if (enabledStems.has(s)) {
-      enabledStems.delete(s);
-    } else {
-      enabledStems.add(s);
-    }
-    await applyMixFromStems();
-  })
-);
+// 自訂混音按鈕是動態產生的，用事件委派處理點擊
+els.stemToggles.addEventListener("click", async (e) => {
+  const b = e.target.closest(".stem-toggle");
+  if (!b || !stems) return;
+  const s = b.dataset.stem;
+  if (useOriginal) {
+    // 從原曲切到自訂：清空後只留這一軌
+    useOriginal = false;
+    enabledStems.clear();
+    enabledStems.add(s);
+  } else if (enabledStems.has(s)) {
+    enabledStems.delete(s);
+  } else {
+    enabledStems.add(s);
+  }
+  await applyMixFromStems();
+});
