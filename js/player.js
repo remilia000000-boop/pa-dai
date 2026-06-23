@@ -38,6 +38,7 @@ export class AudioEngine {
     // 輸出鏈：GrainPlayer → EQ → gain → limiter → destination
     this.limiter = null;
     this.outGain = null;
+    this._volume = 1; // 使用者音量 0..1.5（折進 outGain，限幅器在後保護）
 
     // 頻段 EQ / 單頻段獨奏
     this.eqInput = null;
@@ -121,7 +122,7 @@ export class AudioEngine {
     // 持久的輸出鏈（只建立一次）：稍微降增益 + 限幅器，避免大聲段落爆音
     if (!this.limiter) {
       this.limiter = new Tone.Limiter(-1).toDestination();
-      this.outGain = new Tone.Gain(0.85).connect(this.limiter);
+      this.outGain = new Tone.Gain(0.85 * this._volume).connect(this.limiter);
 
       // 頻譜分析器（接在限幅器後，反映實際聽到的聲音）
       this.analyser = new Tone.Analyser("fft", 1024);
@@ -162,6 +163,17 @@ export class AudioEngine {
       this.loopEnd = this.duration;
     }
     this._applyEq();
+  }
+
+  // ---------- 音量 ----------
+  /** 設定音量（0..1.5，1=原始）。折進 outGain，限幅器在後保護不爆音。 */
+  setVolume(v) {
+    this._volume = Math.max(0, Math.min(1.5, v));
+    if (this.outGain) this.outGain.gain.value = 0.85 * this._volume;
+  }
+
+  get volume() {
+    return this._volume;
   }
 
   // ---------- 頻段 EQ / 單頻段獨奏 ----------

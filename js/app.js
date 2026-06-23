@@ -3,10 +3,10 @@
  * 串接 AudioEngine、Waveform 與 UI：檔案載入、傳輸控制、
  * 速度/音高、AB 循環、波形互動與鍵盤快捷鍵。
  */
-import { AudioEngine } from "./player.js?v=10";
-import { Waveform } from "./waveform.js?v=10";
-import { StemSeparator, TRACK_LABELS, TRACK_ICONS } from "./separator.js?v=10";
-import { audioBufferToWav, downloadBlob } from "./exporters.js?v=10";
+import { AudioEngine } from "./player.js?v=11";
+import { Waveform } from "./waveform.js?v=11";
+import { StemSeparator, TRACK_LABELS, TRACK_ICONS } from "./separator.js?v=11";
+import { audioBufferToWav, downloadBlob } from "./exporters.js?v=11";
 
 const $ = (id) => document.getElementById(id);
 
@@ -27,6 +27,9 @@ const els = {
   rewindBtn: $("rewindBtn"),
   playBtn: $("playBtn"),
   loopBtn: $("loopBtn"),
+  volume: $("volume"),
+  volumeVal: $("volumeVal"),
+  muteBtn: $("muteBtn"),
   speed: $("speed"),
   speedVal: $("speedVal"),
   pitch: $("pitch"),
@@ -202,6 +205,32 @@ document.querySelectorAll(".reset-link").forEach((btn) => {
   });
 });
 
+// ---------- 音量 ----------
+let preMuteVolume = 100;
+
+function setVolumeUI(pct, fromSlider) {
+  pct = Math.max(0, Math.min(150, Math.round(pct)));
+  engine.setVolume(pct / 100);
+  els.volumeVal.textContent = pct + "%";
+  els.muteBtn.textContent = pct === 0 ? "🔇" : pct < 60 ? "🔉" : "🔊";
+  if (!fromSlider) els.volume.value = String(pct);
+}
+
+function toggleMute() {
+  const cur = parseInt(els.volume.value, 10);
+  if (cur > 0) {
+    preMuteVolume = cur;
+    setVolumeUI(0, false);
+  } else {
+    setVolumeUI(preMuteVolume || 100, false);
+  }
+}
+
+els.volume.addEventListener("input", () => {
+  setVolumeUI(parseInt(els.volume.value, 10), true);
+});
+els.muteBtn.addEventListener("click", toggleMute);
+
 // ---------- AB 循環 ----------
 function updateLoopUI() {
   els.aVal.textContent = "A " + (pointA == null ? "—" : formatTime(pointA));
@@ -352,6 +381,9 @@ window.addEventListener("keydown", (e) => {
       engine.setSemitones(Math.min(12, engine.semitones + 1));
       updatePitchUI();
       break;
+    case "KeyM":
+      toggleMute();
+      break;
   }
 });
 
@@ -379,6 +411,7 @@ requestAnimationFrame(tick);
 // 初始 UI
 updateSpeedUI();
 updatePitchUI();
+setVolumeUI(parseInt(els.volume.value, 10), true);
 
 
 // ============================================================

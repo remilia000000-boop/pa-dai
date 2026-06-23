@@ -171,8 +171,7 @@ body {
 .time { font-size: 20px; font-weight: 600; }
 .time.muted, .time-sep { color: var(--text-muted); font-weight: 400; }
 
-/* ---------- Transport ---------- */
-.transport {
+/* ---------- Transport ---------- */.transport {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -206,6 +205,30 @@ body {
   background: var(--accent-2);
   border-color: var(--accent-2);
   color: #1a1206;
+}
+
+/* ---------- Volume ---------- */
+.volume-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.vol-icon {
+  background: none;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 2px 4px;
+  line-height: 1;
+}
+.volume-row input[type="range"] { max-width: 220px; }
+.vol-val {
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  color: var(--text-muted);
+  min-width: 42px;
+  text-align: right;
 }
 
 /* ---------- Controls ---------- */

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>扒帶工具 · Ear Trainer</title>
-  <link rel="stylesheet" href="styles.css?v=10" />
+  <link rel="stylesheet" href="styles.css?v=11" />
   <!-- Tone.js (global) for granular pitch/speed independent playback -->
   <script src="https://unpkg.com/tone@15.0.4/build/Tone.js"></script>
 </head>
@@ -66,6 +66,13 @@
         <button id="rewindBtn" class="round-btn" title="回到開頭 (Home)">⏮</button>
         <button id="playBtn" class="round-btn play" title="播放 / 暫停 (空白鍵)">▶</button>
         <button id="loopBtn" class="round-btn toggle" title="AB 循環開關 (L)">🔁</button>
+      </div>
+
+      <!-- 音量 -->
+      <div class="volume-row">
+        <button id="muteBtn" class="vol-icon" title="靜音 (M)">🔊</button>
+        <input id="volume" type="range" min="0" max="150" step="1" value="100" title="音量" />
+        <span id="volumeVal" class="vol-val">100%</span>
       </div>
 
       <!-- 控制旋鈕 -->
@@ -196,11 +203,12 @@
         <li><kbd>A</kbd> / <kbd>B</kbd> 在目前位置設定 A / B 點</li>
         <li><kbd>↑</kbd> / <kbd>↓</kbd> 速度 +/- 5%</li>
         <li><kbd>[</kbd> / <kbd>]</kbd> 音高 -/+ 1 半音</li>
+        <li><kbd>M</kbd> 靜音 / 取消靜音</li>
       </ul>
       <button id="closeHelpBtn" class="primary-btn">知道了</button>
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=10"></script>
+  <script type="module" src="js/app.js?v=11"></script>
 </body>
 </html>
