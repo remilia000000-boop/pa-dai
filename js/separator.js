@@ -10,7 +10,7 @@
  * 後端：優先 WebGPU，否則單執行緒 WASM（免 SharedArrayBuffer，
  * 可直接部署在 GitHub Pages）。模型以 Cache Storage 快取。
  */
-import { DemucsProcessor, CONSTANTS } from "../vendor/demucs-web/index.js";
+import { DemucsProcessor, CONSTANTS } from "../vendor/demucs-web/index.js?v=2";
 
 const ORT_VERSION = "1.27.0";
 const ORT_URL = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_VERSION}/dist/ort.webgpu.bundle.min.mjs`;
