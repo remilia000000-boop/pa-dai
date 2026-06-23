@@ -172,11 +172,14 @@ export class StemSeparator {
       });
       await this.processor.loadModel(buffer);
     } else {
-      // 單一圖模型：自行建立 session
+      // 此單一圖模型的 iSTFT(ConstantOfShape) 目前無法在 onnxruntime-web 的
+      // WebGPU EP 建立 session，因此固定用 WASM（較慢但相容）。
+      this.backend = "wasm";
+      this.cb.onBackend?.("wasm");
+      this.log("model", "此模型使用 WASM 運算（較慢，請耐心等候）");
       this.session = await ort.InferenceSession.create(buffer, {
-        executionProviders:
-          this.backend === "webgpu" ? ["webgpu", "wasm"] : ["wasm"],
-        graphOptimizationLevel: "basic",
+        executionProviders: ["wasm"],
+        graphOptimizationLevel: "all",
       });
     }
 
