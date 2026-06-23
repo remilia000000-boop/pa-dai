@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>扒帶工具 · Ear Trainer</title>
+  <link rel="stylesheet" href="styles.css" />
+  <!-- Tone.js (global) for granular pitch/speed independent playback -->
+  <script src="https://unpkg.com/tone@15.0.4/build/Tone.js"></script>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo">🎧</span>
+        <div>
+          <h1>扒帶工具</h1>
+          <p class="tagline">變速不變調 · 變調不變速 · AB 循環</p>
+        </div>
+      </div>
+      <button id="helpBtn" class="ghost-btn" title="快捷鍵說明">?</button>
+    </header>
+
+    <!-- 載入區 -->
+    <section id="dropzone" class="dropzone">
+      <div class="dropzone-inner">
+        <div class="dz-icon">🎵</div>
+        <p class="dz-title">把音訊檔拖進來，或點擊選擇</p>
+        <p class="dz-sub">支援 mp3 / wav / m4a / ogg / flac 等瀏覽器可解碼的格式</p>
+        <button id="pickBtn" class="primary-btn">選擇檔案</button>
+        <input id="fileInput" type="file" accept="audio/*" hidden />
+      </div>
+    </section>
+
+    <!-- 主工作區 -->
+    <main id="workspace" class="workspace hidden">
+      <div class="track-info">
+        <span id="trackName" class="track-name">—</span>
+        <button id="changeFileBtn" class="ghost-btn small">換一首</button>
+      </div>
+
+      <!-- 波形 -->
+      <div id="waveWrap" class="wave-wrap">
+        <canvas id="waveCanvas" class="wave-canvas"></canvas>
+        <canvas id="overlayCanvas" class="overlay-canvas"></canvas>
+        <div id="waveLoading" class="wave-loading hidden">解碼中…</div>
+      </div>
+
+      <!-- 時間軸 -->
+      <div class="time-row">
+        <span id="curTime" class="time">0:00.0</span>
+        <span class="time-sep">/</span>
+        <span id="totalTime" class="time muted">0:00.0</span>
+      </div>
+
+      <!-- 傳輸控制 -->
+      <div class="transport">
+        <button id="rewindBtn" class="round-btn" title="回到開頭 (Home)">⏮</button>
+        <button id="playBtn" class="round-btn play" title="播放 / 暫停 (空白鍵)">▶</button>
+        <button id="loopBtn" class="round-btn toggle" title="AB 循環開關 (L)">🔁</button>
+      </div>
+
+      <!-- 控制旋鈕 -->
+      <div class="controls">
+        <!-- 速度 -->
+        <div class="control-card">
+          <div class="control-head">
+            <label for="speed">速度</label>
+            <span id="speedVal" class="control-val">100%</span>
+            <button class="reset-link" data-reset="speed">重設</button>
+          </div>
+          <input id="speed" type="range" min="0.25" max="1.5" step="0.05" value="1" />
+          <div class="ticks"><span>25%</span><span>100%</span><span>150%</span></div>
+        </div>
+
+        <!-- 音高 -->
+        <div class="control-card">
+          <div class="control-head">
+            <label for="pitch">音高</label>
+            <span id="pitchVal" class="control-val">±0 半音</span>
+            <button class="reset-link" data-reset="pitch">重設</button>
+          </div>
+          <input id="pitch" type="range" min="-12" max="12" step="1" value="0" />
+          <div class="ticks"><span>-12</span><span>0</span><span>+12</span></div>
+        </div>
+      </div>
+
+      <!-- AB 循環區段 -->
+      <div class="loop-bar">
+        <span class="loop-label">AB 循環</span>
+        <button id="setABtn" class="chip">設定 A</button>
+        <span id="aVal" class="chip-val">A —</span>
+        <button id="setBBtn" class="chip">設定 B</button>
+        <span id="bVal" class="chip-val">B —</span>
+        <button id="clearLoopBtn" class="chip ghost">清除</button>
+        <span class="loop-hint">提示：在波形上拖曳可直接框選區段</span>
+      </div>
+    </main>
+
+    <footer class="footer">
+      <span>純前端 · 檔案不會上傳，全程在你的瀏覽器中處理</span>
+    </footer>
+  </div>
+
+  <!-- 快捷鍵說明 -->
+  <div id="helpModal" class="modal hidden">
+    <div class="modal-card">
+      <h2>快捷鍵</h2>
+      <ul class="shortcuts">
+        <li><kbd>空白鍵</kbd> 播放 / 暫停</li>
+        <li><kbd>←</kbd> / <kbd>→</kbd> 後退 / 前進 5 秒</li>
+        <li><kbd>Home</kbd> 回到開頭</li>
+        <li><kbd>L</kbd> 切換 AB 循環</li>
+        <li><kbd>A</kbd> / <kbd>B</kbd> 在目前位置設定 A / B 點</li>
+        <li><kbd>↑</kbd> / <kbd>↓</kbd> 速度 +/- 5%</li>
+        <li><kbd>[</kbd> / <kbd>]</kbd> 音高 -/+ 1 半音</li>
+      </ul>
+      <button id="closeHelpBtn" class="primary-btn">知道了</button>
+    </div>
+  </div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
