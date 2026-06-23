@@ -55,8 +55,41 @@ export class AudioEngine {
 
     const arrayBuffer = await file.arrayBuffer();
     const audioBuffer = await Tone.getContext().decodeAudioData(arrayBuffer);
+    this._buildPlayer(audioBuffer, { resetLoop: true, resetPosition: true });
+    return audioBuffer;
+  }
 
-    // 釋放舊的 player
+  /**
+   * 直接以既有的 AudioBuffer 載入（用於切換分離後的 stem 混音）。
+   * @param {AudioBuffer} audioBuffer
+   * @param {{preserve?:boolean}} [opts] preserve=true 時保留循環/位置/播放狀態
+   */
+  async loadAudioBuffer(audioBuffer, opts = {}) {
+    await Tone.start();
+    const preserve = !!opts.preserve;
+    const prevPos = preserve ? this.getPosition() : 0;
+    const wasPlaying = preserve ? this._playing : false;
+
+    this._buildPlayer(audioBuffer, {
+      resetLoop: !preserve,
+      resetPosition: !preserve,
+    });
+
+    if (preserve) {
+      // 夾在新長度範圍內
+      this.loopStart = Math.min(this.loopStart, this.duration);
+      this.loopEnd = Math.min(this.loopEnd, this.duration);
+      this._applyLoopToPlayer();
+      this._startOffset = Math.min(prevPos, this.duration);
+      // 舊 player 已釋放，清掉殘留的播放旗標再決定是否續播
+      this._playing = false;
+      if (wasPlaying) this.play();
+    }
+    return audioBuffer;
+  }
+
+  /** 共用：以 AudioBuffer 建立 GrainPlayer 並套用目前參數。 */
+  _buildPlayer(audioBuffer, { resetLoop, resetPosition }) {
     if (this.player) {
       try { this.player.stop(); } catch (_) {}
       this.player.dispose();
@@ -74,13 +107,15 @@ export class AudioEngine {
     this.player.playbackRate = this._speed;
     this.player.detune = this._semitones * 100;
 
-    this._startOffset = 0;
-    this._playing = false;
-    this.loop = false;
-    this.loopStart = 0;
-    this.loopEnd = this.duration;
-
-    return audioBuffer;
+    if (resetPosition) {
+      this._startOffset = 0;
+      this._playing = false;
+    }
+    if (resetLoop) {
+      this.loop = false;
+      this.loopStart = 0;
+      this.loopEnd = this.duration;
+    }
   }
 
   /** 取得目前播放位置（秒），已處理循環回繞。 */

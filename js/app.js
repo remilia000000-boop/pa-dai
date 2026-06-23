@@ -5,6 +5,7 @@
  */
 import { AudioEngine } from "./player.js";
 import { Waveform } from "./waveform.js";
+import { StemSeparator } from "./separator.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -37,6 +38,15 @@ const els = {
   helpBtn: $("helpBtn"),
   helpModal: $("helpModal"),
   closeHelpBtn: $("closeHelpBtn"),
+  // 音軌分離
+  sepPanel: $("sepPanel"),
+  separateBtn: $("separateBtn"),
+  sepProgress: $("sepProgress"),
+  sepStageLabel: $("sepStageLabel"),
+  sepBackend: $("sepBackend"),
+  sepBar: $("sepBar"),
+  sepLog: $("sepLog"),
+  stemMixer: $("stemMixer"),
 };
 
 const engine = new AudioEngine();
@@ -45,6 +55,13 @@ const waveform = new Waveform(els.waveCanvas, els.overlayCanvas, els.waveWrap);
 // AB 點（秒），null 表示未設定
 let pointA = null;
 let pointB = null;
+
+// 音軌分離狀態
+let currentFile = null; // 目前載入的檔案（供分離時以 44100 重新解碼）
+let stems = null; // { drums, bass, other, vocals } @44100
+let original44 = null; // 44100 的原曲 AudioBuffer（分離後作為「原曲」與切換基準）
+let separator = null;
+const enabledStems = new Set(); // 自訂混音中啟用的軌道
 
 // ---------- 工具 ----------
 function formatTime(sec) {
@@ -67,6 +84,8 @@ async function handleFile(file) {
   els.workspace.classList.remove("hidden");
   els.waveLoading.classList.remove("hidden");
   els.trackName.textContent = file.name;
+  currentFile = file;
+  resetSeparationUI();
 
   try {
     const buffer = await engine.loadFile(file);
@@ -344,3 +363,211 @@ requestAnimationFrame(tick);
 // 初始 UI
 updateSpeedUI();
 updatePitchUI();
+
+
+// ============================================================
+// 音軌分離
+// ============================================================
+let useOriginal = false; // 目前是否播放原曲（相對於自訂混音）
+
+function setSepStage(text) { els.sepStageLabel.textContent = text; }
+function setSepBar(pct) { els.sepBar.style.width = Math.max(0, Math.min(100, pct)) + "%"; }
+
+function resetSeparationUI() {
+  stems = null;
+  original44 = null;
+  separator = null;
+  useOriginal = false;
+  enabledStems.clear();
+  els.separateBtn.disabled = false;
+  els.separateBtn.classList.remove("hidden");
+  els.sepProgress.classList.add("hidden");
+  els.stemMixer.classList.add("hidden");
+  els.sepBackend.textContent = "";
+  setSepBar(0);
+  els.sepLog.textContent = "";
+  setSepStage("準備中…");
+}
+
+/** 以 44100Hz 解碼檔案（必要時重新取樣）。 */
+async function decodeAt44100(file) {
+  const arr = await file.arrayBuffer();
+  const AC = window.AudioContext || window.webkitAudioContext;
+  let buf;
+  try {
+    const ac = new AC({ sampleRate: 44100 });
+    buf = await ac.decodeAudioData(arr.slice(0));
+    ac.close?.();
+  } catch (_) {
+    const ac = new AC();
+    buf = await ac.decodeAudioData(arr.slice(0));
+    ac.close?.();
+  }
+  if (buf.sampleRate === 44100) return buf;
+  // 重新取樣到 44100
+  const off = new OfflineAudioContext(
+    buf.numberOfChannels,
+    Math.ceil(buf.duration * 44100),
+    44100
+  );
+  const src = off.createBufferSource();
+  src.buffer = buf;
+  src.connect(off.destination);
+  src.start();
+  return await off.startRendering();
+}
+
+/** 把指定軌道相加成一個立體聲 AudioBuffer。 */
+function buildMixBuffer(list) {
+  const N = original44.length;
+  const buf = new AudioBuffer({ length: N, numberOfChannels: 2, sampleRate: 44100 });
+  const L = buf.getChannelData(0);
+  const R = buf.getChannelData(1);
+  for (const name of list) {
+    const s = stems[name];
+    if (!s) continue;
+    const n = Math.min(N, s.left.length);
+    for (let i = 0; i < n; i++) {
+      L[i] += s.left[i];
+      R[i] += s.right[i];
+    }
+  }
+  return buf;
+}
+
+/** 把新的緩衝載入引擎與波形，保留循環/位置/播放狀態。 */
+async function swapBuffer(buf) {
+  await engine.loadAudioBuffer(buf, { preserve: true });
+  waveform.setBuffer(buf);
+  if (pointA != null && pointB != null && pointB > pointA) {
+    waveform.setRegion({ start: pointA, end: pointB });
+  }
+  setPlayingUI(engine.isPlaying);
+}
+
+async function applyMixFromStems() {
+  useOriginal = false;
+  const list = [...enabledStems];
+  const buf = list.length ? buildMixBuffer(list) : new AudioBuffer({
+    length: original44.length, numberOfChannels: 2, sampleRate: 44100,
+  });
+  await swapBuffer(buf);
+  updateMixerUI();
+}
+
+async function loadOriginalMix() {
+  useOriginal = true;
+  enabledStems.clear();
+  await swapBuffer(original44);
+  updateMixerUI();
+}
+
+function setEq(set, arr) {
+  return set.size === arr.length && arr.every((x) => set.has(x));
+}
+
+function updateMixerUI() {
+  document.querySelectorAll(".preset").forEach((b) => {
+    const p = b.dataset.preset;
+    let active = false;
+    if (p === "original") active = useOriginal;
+    else if (p === "inst") active = !useOriginal && setEq(enabledStems, ["drums", "bass", "other"]);
+    else if (p === "vocals") active = !useOriginal && setEq(enabledStems, ["vocals"]);
+    b.classList.toggle("active", active);
+  });
+  document.querySelectorAll(".stem-toggle").forEach((b) => {
+    b.classList.toggle("on", !useOriginal && enabledStems.has(b.dataset.stem));
+  });
+}
+
+async function runSeparation() {
+  if (!currentFile) return;
+  els.separateBtn.disabled = true;
+  els.sepProgress.classList.remove("hidden");
+  setSepStage("解碼音訊（44.1kHz）…");
+  setSepBar(0);
+  els.sepLog.textContent = "";
+
+  try {
+    original44 = await decodeAt44100(currentFile);
+
+    separator = new StemSeparator({
+      onBackend: (b) => { els.sepBackend.textContent = b.toUpperCase(); },
+      onDownloadProgress: (loaded, total) => {
+        setSepStage("下載 AI 模型…");
+        if (total) setSepBar((loaded / total) * 100);
+        const mb = (x) => (x / 1048576).toFixed(1);
+        els.sepLog.textContent = total ? `${mb(loaded)} / ${mb(total)} MB` : `${mb(loaded)} MB`;
+      },
+      onProgress: (p, seg, tot) => {
+        setSepStage("AI 分離中…");
+        setSepBar(p * 100);
+        els.sepLog.textContent = `區段 ${seg} / ${tot}`;
+      },
+      onLog: (phase, msg) => {
+        if (phase === "init" || phase === "model") els.sepLog.textContent = msg;
+      },
+    });
+
+    stems = await separator.separate(original44);
+
+    // 切換引擎基準到 44100 原曲，之後各種混音切換才能完全對齊
+    await engine.loadAudioBuffer(original44, { preserve: true });
+    waveform.setBuffer(original44);
+    if (pointA != null && pointB != null && pointB > pointA) {
+      waveform.setRegion({ start: pointA, end: pointB });
+    }
+
+    setSepStage("完成！");
+    setSepBar(100);
+    els.sepProgress.classList.add("hidden");
+    els.separateBtn.classList.add("hidden");
+    els.stemMixer.classList.remove("hidden");
+    useOriginal = true;
+    enabledStems.clear();
+    updateMixerUI();
+  } catch (err) {
+    console.error(err);
+    setSepStage("分離失敗");
+    els.sepLog.textContent = (err && err.message) ? err.message : String(err);
+    els.separateBtn.disabled = false;
+  }
+}
+
+els.separateBtn.addEventListener("click", runSeparation);
+
+document.querySelectorAll(".preset").forEach((b) =>
+  b.addEventListener("click", async () => {
+    if (!stems) return;
+    const p = b.dataset.preset;
+    if (p === "original") {
+      await loadOriginalMix();
+    } else if (p === "inst") {
+      enabledStems.clear();
+      ["drums", "bass", "other"].forEach((s) => enabledStems.add(s));
+      await applyMixFromStems();
+    } else if (p === "vocals") {
+      enabledStems.clear();
+      enabledStems.add("vocals");
+      await applyMixFromStems();
+    }
+  })
+);
+
+document.querySelectorAll(".stem-toggle").forEach((b) =>
+  b.addEventListener("click", async () => {
+    if (!stems) return;
+    const s = b.dataset.stem;
+    if (useOriginal) {
+      // 從原曲切到自訂：清空後只留這一軌
+      useOriginal = false;
+      enabledStems.clear();
+      enabledStems.add(s);
+    } else if (enabledStems.has(s)) {
+      enabledStems.delete(s);
+    } else {
+      enabledStems.add(s);
+    }
+    await applyMixFromStems();
+  })
+);

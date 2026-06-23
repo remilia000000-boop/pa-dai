@@ -296,6 +296,99 @@ input[type="range"]::-moz-range-thumb {
 }
 .loop-hint { color: var(--text-muted); font-size: 12px; margin-left: auto; }
 
+/* ---------- Separation panel ---------- */
+.sep-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.sep-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.sep-title { font-size: 15px; font-weight: 700; }
+.sep-note { color: var(--text-muted); font-size: 13px; }
+.sep-hint { color: var(--text-muted); font-size: 12px; line-height: 1.5; }
+#separateBtn { align-self: flex-start; }
+
+.sep-progress { display: flex; flex-direction: column; gap: 8px; }
+.sep-stage {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+}
+.sep-backend {
+  font-size: 11px;
+  font-weight: 700;
+  color: #1a1206;
+  background: var(--accent-2);
+  border-radius: 6px;
+  padding: 2px 8px;
+}
+.bar {
+  width: 100%;
+  height: 8px;
+  background: var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.bar-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  transition: width 0.2s ease;
+}
+.sep-log {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  min-height: 16px;
+}
+
+.stem-mixer { display: flex; flex-direction: column; gap: 10px; }
+.mixer-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.mixer-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  min-width: 72px;
+}
+.preset.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.stem-toggle {
+  background: var(--bg-soft);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+.stem-toggle:hover { border-color: var(--accent); }
+.stem-toggle.on {
+  background: var(--accent-soft);
+  color: var(--text);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+.mixer-hint { color: var(--text-muted); font-size: 12px; }
+
 /* ---------- Footer ---------- */
 .footer {
   text-align: center;

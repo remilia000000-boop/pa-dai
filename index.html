@@ -95,6 +95,42 @@
         <button id="clearLoopBtn" class="chip ghost">清除</button>
         <span class="loop-hint">提示：在波形上拖曳可直接框選區段</span>
       </div>
+
+      <!-- 音軌分離 -->
+      <section id="sepPanel" class="sep-panel">
+        <div class="sep-head">
+          <span class="sep-title">🎚️ 音軌分離</span>
+          <span class="sep-note">把歌拆成 鼓 / 貝斯 / 其他 / 人聲，可只聽伴奏或人聲</span>
+        </div>
+        <button id="separateBtn" class="primary-btn">開始分離</button>
+        <p class="sep-hint">首次會下載約 172MB AI 模型（之後瀏覽器會快取，免再下載）。建議用支援 WebGPU 的瀏覽器（Chrome / Edge / 新版 Safari）以加快速度。</p>
+
+        <div id="sepProgress" class="sep-progress hidden">
+          <div class="sep-stage">
+            <span id="sepStageLabel">準備中…</span>
+            <span id="sepBackend" class="sep-backend"></span>
+          </div>
+          <div class="bar"><div id="sepBar" class="bar-fill"></div></div>
+          <div id="sepLog" class="sep-log"></div>
+        </div>
+
+        <div id="stemMixer" class="stem-mixer hidden">
+          <div class="mixer-row">
+            <span class="mixer-label">快速切換</span>
+            <button class="chip preset" data-preset="original">原曲</button>
+            <button class="chip preset" data-preset="inst">伴奏（去人聲）</button>
+            <button class="chip preset" data-preset="vocals">只有人聲</button>
+          </div>
+          <div class="mixer-row">
+            <span class="mixer-label">自訂混音</span>
+            <button class="stem-toggle" data-stem="drums">🥁 鼓</button>
+            <button class="stem-toggle" data-stem="bass">🎸 貝斯</button>
+            <button class="stem-toggle" data-stem="other">🎹 其他</button>
+            <button class="stem-toggle" data-stem="vocals">🎤 人聲</button>
+          </div>
+          <p class="mixer-hint">分離為估計結果，並非 100% 乾淨；放慢速度時更容易聽清楚。</p>
+        </div>
+      </section>
     </main>
 
     <footer class="footer">
